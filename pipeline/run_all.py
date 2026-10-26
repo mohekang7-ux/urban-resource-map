@@ -1,0 +1,59 @@
+"""執行所有資料管線：python pipeline/run_all.py [--force]
+
+--force：重新下載原始資料（預設沿用 data/raw 裡已下載的檔案）
+"""
+
+from __future__ import annotations
+
+import sys
+
+import education
+import income
+import population
+import villages
+import zoning
+from common import PROCESSED
+
+OUT = PROCESSED / "ogdl"  # 政府資料開放授權條款第1版的衍生資料
+
+
+def report_missing(df, column: str, label: str) -> None:
+    missing = df[column].isna()
+    if missing.any():
+        names = (df.loc[missing, "district"] + df.loc[missing, "village"]).tolist()
+        print(f"  警告：{missing.sum()} 個村里沒有對到{label}：{names}")
+
+
+def main(force: bool = False) -> None:
+    OUT.mkdir(parents=True, exist_ok=True)
+
+    print("[1/5] 村里界")
+    vil = villages.fetch(force)
+
+    print("[2/5] 村里人口")
+    pop = population.fetch(force)
+    vil = vil.merge(pop, on="village_code", how="left")
+    report_missing(vil, "pop_total", "人口資料")
+
+    print("[3/5] 村里教育程度")
+    edu = education.fetch(force)
+    vil = vil.merge(edu, on="village_code", how="left")
+    report_missing(vil, "share_tertiary", "教育程度資料")
+
+    print("[4/5] 村里所得")
+    inc = income.fetch(force)
+    vil = vil.merge(inc, on=["district", "village"], how="left")
+    report_missing(vil, "income_median", "所得資料")
+
+    vil.to_file(OUT / "taipei_villages.geojson", driver="GeoJSON")
+    vil.drop(columns="geometry").to_csv(OUT / "taipei_village_indicators.csv", index=False)
+    print(f"  輸出：{OUT / 'taipei_villages.geojson'}、taipei_village_indicators.csv")
+
+    print("[5/5] 使用分區")
+    zon = zoning.fetch(force)
+    zon.to_file(OUT / "taipei_zoning.geojson", driver="GeoJSON")
+    print(f"  輸出：{OUT / 'taipei_zoning.geojson'}")
+
+
+if __name__ == "__main__":
+    main(force="--force" in sys.argv)

@@ -4,3 +4,17 @@
 .Rhistory
 .RData
 .Rproj.user/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# 金鑰（不要提交）
+.env
+
+# 原始下載資料（可由 pipeline 重新產生）
+data/raw/
+
+# 大型衍生圖檔（可由 pipeline 重新產生；之後改用 PMTiles 發布）
+data/processed/ogdl/taipei_zoning.geojson
