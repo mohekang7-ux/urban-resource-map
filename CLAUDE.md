@@ -41,6 +41,11 @@
   - `common.py`：data.gov.tw 資料集查詢、下載、解壓縮（處理 Big5 檔名）
   - `villages.py`：村里界；`population.py`：村里人口與指標；`education.py`：教育程度；`income.py`：綜所稅所得；`zoning.py`：使用分區與大類
   - 輸出：`data/processed/ogdl/taipei_villages.geojson`（村里界加上所有指標）、`taipei_village_indicators.csv`、`taipei_zoning.geojson`（不進 git）
+- **網頁原型**在 `site/`：靜態網站，用 MapLibre GL JS 4.7.1 加上 OpenFreeMap positron 底圖（免金鑰）。
+  - 先跑 `run_all.py`，再跑 `.venv/bin/python pipeline/build_site.py`，產生 `site/data/`（villages.geojson、zoning.geojson、meta.json）。
+  - 本機預覽：`.claude/launch.json` 的 `site` 設定（`python -m http.server 8765 --directory site`）。
+  - 目前只有「探索鄰里」模式可用；「找資源」「示範點」是佔位頁，要等據點資料和需求清單。
+  - 堆肥站座標（121.5397753, 25.019594）取自使用者提供的 Google 地圖標記（地標名 NTU Roots & Shoots composting site）。使用者不需要範圍圈（2026-10-26）。
 - **資料夾**：`data/raw/` 放原始下載（不進 git）；`data/processed/ogdl|odbl|field/` 依授權分開存放衍生資料。
 - **金鑰**：放在本機 `.env`（範本是 `.env.example`），不進 git、不貼進對話。
 - 其他技術決策見 `docs/decisions.md` 和 `docs/platform-architecture.md`。

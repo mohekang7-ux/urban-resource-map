@@ -45,6 +45,9 @@ def main(force: bool = False) -> None:
     vil = vil.merge(inc, on=["district", "village"], how="left")
     report_missing(vil, "income_median", "所得資料")
 
+    vil["area_km2"] = (vil.to_crs(3826).area / 1e6).round(3)
+    vil["pop_density"] = (vil["pop_total"] / vil["area_km2"]).round(0)  # 每平方公里人數
+
     vil.to_file(OUT / "taipei_villages.geojson", driver="GeoJSON")
     vil.drop(columns="geometry").to_csv(OUT / "taipei_village_indicators.csv", index=False)
     print(f"  輸出：{OUT / 'taipei_villages.geojson'}、taipei_village_indicators.csv")

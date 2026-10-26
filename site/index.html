@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>台北製造能力地圖（原型）</title>
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">台北製造能力地圖 <span class="badge">原型</span></div>
+    <nav class="modes" aria-label="模式">
+      <button class="mode active" data-mode="explore">探索鄰里</button>
+      <button class="mode" data-mode="resources">找資源</button>
+      <button class="mode" data-mode="demo">示範點</button>
+    </nav>
+  </header>
+
+  <main class="layout">
+    <div id="map" aria-label="地圖"></div>
+
+    <section class="controls" aria-label="圖層">
+      <label class="field-label" for="indicator">鄰里指標</label>
+      <select id="indicator"></select>
+      <p id="indicator-note" class="note"></p>
+      <div id="legend" class="legend"></div>
+
+      <div class="toggles">
+        <label><input type="checkbox" id="toggle-zoning"> 都市計畫使用分區</label>
+        <label><input type="checkbox" id="toggle-demo" checked> 示範點（堆肥站）</label>
+      </div>
+      <div id="zoning-legend" class="legend zoning-legend" hidden></div>
+    </section>
+
+    <aside id="panel" class="panel" aria-live="polite"></aside>
+  </main>
+
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

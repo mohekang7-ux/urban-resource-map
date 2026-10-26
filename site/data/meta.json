@@ -1,0 +1,27 @@
+{
+  "periods": {
+    "population": "11509",
+    "education": "114",
+    "income": "112"
+  },
+  "taipei_median": {
+    "pop_total": 5096.5,
+    "pop_density": 26561.0,
+    "share_65_plus": 25.4,
+    "share_0_14": 10.4,
+    "sex_ratio": 88.5,
+    "dependency_ratio": 57.3,
+    "aging_index": 245.3,
+    "share_tertiary": 64.0,
+    "share_tertiary_m": 67.2,
+    "share_tertiary_f": 61.0,
+    "share_graduate": 14.1,
+    "share_secondary": 22.0,
+    "share_basic": 13.8,
+    "income_median": 650.0,
+    "income_mean": 1156.0,
+    "income_q1": 296.0,
+    "income_q3": 1381.0,
+    "income_iqr": 1083.5
+  }
+}
