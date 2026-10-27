@@ -1,0 +1,2 @@
+address,village_code,business_id,since_year,verified_at,visibility,status,verification,category_label,geocode_level,node_id,name,lon,lat,needs,confidence,source,license
+,63000030057,,,2026-10-25,public,open,3,,source,field-ntu-compost,台大社區堆肥站,121.5397753,25.019594,community,high,user-2026-10-25,CC-BY-4.0

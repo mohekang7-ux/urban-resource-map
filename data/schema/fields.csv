@@ -7,6 +7,7 @@ nodes,lat,number,yes,24.9–25.3,緯度（WGS84）
 nodes,village_code,string,no,,所在村里代碼（11 碼），由座標判斷
 nodes,needs,list,yes,needs.csv,需求分類，可多選，以分號分隔
 nodes,source_category,string,no,,來源的原始分類，例如 F206010、25、craft=carpenter
+nodes,category_label,string,no,,來源分類的中文名稱，例如「五金零售業（商業登記）」，只描述登記或標註上的事實
 nodes,business_id,string,no,,統一編號
 nodes,since_year,integer,no,,開業或登記年（西元）
 nodes,status,enum,yes,open;closed;unknown,營業狀態
@@ -22,8 +23,16 @@ resources,class_id,enum,yes,resource_classes.csv,資源類別
 resources,item_id,enum,yes,resource_items.csv,資源項目
 resources,access,list,yes,access_modes.csv,取得方式，可多選，以分號分隔
 resources,note,string,no,,補充說明，例如「每週六」「需預約」
-resources,inferred,boolean,yes,true;false,是否由來源分類推論而來（true 表示未實際確認）
 resources,confidence,enum,yes,high;medium;low,可信度
 resources,verification,integer,yes,0;1;2;3,同 nodes
 resources,verified_at,date,no,,最後確認日期
 resources,source,list,yes,,資料來源代碼
+intents,intent_id,string,yes,,唯一代碼：node_id 加 need 或 offer 加項目代碼
+intents,node_id,string,yes,nodes.node_id,提出需求或供給的據點
+intents,direction,enum,yes,need;offer,need 需求、offer 供給（供給目前記在 resources，之後可統一）
+intents,item_id,enum,yes,resource_items.csv,資源項目
+intents,status,enum,yes,missing;partial;unknown,缺、部分有、待查
+intents,note,string,no,,補充說明
+intents,verification,integer,yes,0;1;2;3,同 nodes
+intents,verified_at,date,no,,最後確認日期
+intents,source,list,yes,,資料來源代碼

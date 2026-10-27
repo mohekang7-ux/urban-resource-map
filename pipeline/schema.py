@@ -5,7 +5,7 @@ python pipeline/schema.py  檢查詞表、對照表與 nodes/*.yaml 彼此是否
 詞表與欄位定義放在 data/schema/：
 - needs.csv：據點的六類需求分類
 - resource_classes.csv、resource_items.csv、access_modes.csv：資源類別、項目、取得方式
-- category_crosswalk.csv：來源分類 → 需求分類與推論資源
+- category_crosswalk.csv：來源分類 → 需求分類與中文名稱（不推論資源）
 - fields.csv：nodes / resources 的欄位定義
 """
 
@@ -54,11 +54,6 @@ def split_list(value) -> list[str]:
     if value is None or (isinstance(value, float) and pd.isna(value)) or value == "":
         return []
     return [v.strip() for v in str(value).split(";") if v.strip()]
-
-
-def parse_implied(spec) -> list[tuple[str, str]]:
-    """把對照表的 implied_resources（item:access;item:access）拆成 (item_id, access)。"""
-    return [tuple(part.split(":", 1)) for part in split_list(spec)]
 
 
 def _enum_values(vocab: Vocab, table: str, field: str) -> set[str] | None:
@@ -126,7 +121,9 @@ def validate_resources(df: pd.DataFrame, vocab: Vocab, node_ids: set[str] | None
 
 
 def check_vocab(vocab: Vocab) -> list[str]:
-    """詞表彼此一致：項目的類別存在、對照表引用的分類與項目都存在。"""
+    """詞表彼此一致：項目的類別存在、對照表引用的需求分類存在。
+
+    對照表只把來源分類對應到需求分類與中文名稱，不推論資源（2026-10-27 決定）。"""
     errors = []
     bad_class = {c for c in vocab.items.values()} - vocab.classes
     if bad_class:
@@ -136,11 +133,6 @@ def check_vocab(vocab: Vocab) -> list[str]:
         bad_needs = set(split_list(row["needs"])) - vocab.needs
         if bad_needs:
             errors.append(f"{where} 的 needs 未定義：{sorted(bad_needs)}")
-        for item, access in parse_implied(row["implied_resources"]):
-            if item not in vocab.items:
-                errors.append(f"{where} 引用了未定義的項目：{item}")
-            if access not in vocab.access:
-                errors.append(f"{where} 引用了未定義的取得方式：{access}")
     return errors
 
 

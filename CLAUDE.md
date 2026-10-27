@@ -40,13 +40,15 @@
 - **資料處理用 Python**。虛擬環境在 `.venv/`，套件列在 `requirements.txt`。
 - **資料管線**在 `pipeline/`：執行 `.venv/bin/python pipeline/run_all.py`（加 `--force` 會重新下載）。
   - `common.py`：data.gov.tw 資料集查詢、下載、解壓縮（處理 Big5 檔名）
-  - `villages.py`：村里界；`population.py`：村里人口與指標；`education.py`：教育程度；`income.py`：綜所稅所得；`village_links.py`：各里在臺北市鄰里服務網的頁面與「里長簡介」連結（不收錄里長個資；里長簡介連結要逐頁讀取，約 8 分鐘，結果有快取）；`zoning.py`：使用分區與大類
+  - `villages.py`：村里界；`population.py`：村里人口與指標；`education.py`：教育程度；`income.py`：綜所稅所得；`village_links.py`：各里在臺北市鄰里服務網的頁面與「里長簡介」連結（不收錄里長個資；里長簡介連結要逐頁讀取，約 8 分鐘，結果有快取）；`zoning.py`：使用分區與大類；`geocode.py`：用臺北市門牌資料做地址轉座標；`nodes.py`：公開資料據點管線（商業登記、登記工廠、特定工廠、OSM、據點範本 → nodes，依授權分開存放；不推論資源）
   - 輸出：`data/processed/ogdl/taipei_villages.geojson`（村里界加上所有指標）、`taipei_village_indicators.csv`、`taipei_zoning.geojson`（不進 git）
 - **網頁原型**在 `site/`：靜態網站，用 MapLibre GL JS 4.7.1 加上 OpenFreeMap positron 底圖（免金鑰）。
-  - 先跑 `run_all.py`，再跑 `.venv/bin/python pipeline/build_site.py`，產生 `site/data/`（villages.geojson、zoning.geojson、meta.json）。
+  - 先跑 `run_all.py` 和 `nodes.py`，再跑 `.venv/bin/python pipeline/build_site.py`，產生 `site/data/`（villages、zoning、meta、nodes_reference、nodes_verified、vocab）。
   - 本機預覽：`.claude/launch.json` 的 `site` 設定（`python -m http.server 8765 --directory site`）。
-  - 目前只有「探索鄰里」模式可用；「找資源」「示範點」是佔位頁，要等據點資料和需求清單。
-  - 堆肥站座標（121.5397753, 25.019594）取自使用者提供的 Google 地圖標記（地標名 NTU Roots & Shoots composting site）。使用者不需要範圍圈（2026-10-26）。
+  - **資料真實性原則（2026-10-27）**：公開資料不推論據點有哪些資源。「公開資料（參考）」模式只顯示高可信度的公開登記店家與工廠，只呈現事實；「資源網絡（已確認）」只放現地確認或據點本身填寫的資源，資料填入前為空。
+  - 只有兩個模式：「公開資料（參考）」與「資源網絡（已確認）」（2026-10-28 由「找資源」更名；程式在 `site/resources.js`，內部 mode 代碼仍是 `resources`）。「示範點」分頁已刪除。
+  - 資源網絡以**空間據點**為單位，每個據點可以有「提供」（resources）與「需要」（wants，來自 `data/processed/field/intents_field.csv`）。沒有固定地點的資源與個人，依 `docs/resource-database.md` 第十四節的例外規則處理。
+  - 堆肥站座標（121.5397753, 25.019594）取自使用者提供的 Google 地圖標記（地標名 NTU Roots & Shoots composting site）。使用者不需要範圍圈（2026-10-26）。堆肥站**不出現在公開資料版面**，它是「資源網絡（已確認）」中的一個據點，需求來自 `nodes/ntu-compost.yaml` 的需求清單（2026-10-28）。
 - **資源資料架構**：詞表、欄位定義、來源對照表在 `data/schema/`；據點範本（含需求清單）在 `nodes/*.yaml`；`.venv/bin/python pipeline/schema.py` 檢查一致性。新增資源項目或來源分類時，改 CSV 即可，再跑一次檢查。
 - **資料夾**：`data/raw/` 放原始下載（不進 git）；`data/processed/ogdl|odbl|field/` 依授權分開存放衍生資料。
 - **金鑰**：放在本機 `.env`（範本是 `.env.example`），不進 git、不貼進對話。

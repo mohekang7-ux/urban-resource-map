@@ -1,0 +1,17 @@
+intent_id,node_id,direction,item_id,status,note,verification,verified_at,source
+field-ntu-compost:need:durable_lumber,field-ntu-compost,need,durable_lumber,missing,現有箱體用廢棄棧板製作，已腐朽、鬆脫,3,2026-10-25,user-2026-10-25
+field-ntu-compost:need:pallets,field-ntu-compost,need,pallets,unknown,若沿用棧板，需確認 IPPC 標記為 HT,3,2026-10-25,user-2026-10-25
+field-ntu-compost:need:hardware_parts,field-ntu-compost,need,hardware_parts,missing,螺絲、鉸鍊，修箱體與蓋子,3,2026-10-25,user-2026-10-25
+field-ntu-compost:need:wood_finish,field-ntu-compost,need,wood_finish,missing,,3,2026-10-25,user-2026-10-25
+field-ntu-compost:need:mesh,field-ntu-compost,need,mesh,unknown,,3,2026-10-25,user-2026-10-25
+field-ntu-compost:need:food_scraps,field-ntu-compost,need,food_scraps,partial,學生自帶為主，量不多,3,2026-10-25,user-2026-10-25
+field-ntu-compost:need:coffee_grounds,field-ntu-compost,need,coffee_grounds,unknown,,3,2026-10-25,user-2026-10-25
+field-ntu-compost:need:power_drill,field-ntu-compost,need,power_drill,partial,,3,2026-10-25,user-2026-10-25
+field-ntu-compost:need:saw,field-ntu-compost,need,saw,partial,,3,2026-10-25,user-2026-10-25
+field-ntu-compost:need:hand_tools,field-ntu-compost,need,hand_tools,partial,,3,2026-10-25,user-2026-10-25
+field-ntu-compost:need:workshop_space,field-ntu-compost,need,workshop_space,partial,,3,2026-10-25,user-2026-10-25
+field-ntu-compost:need:storage_space,field-ntu-compost,need,storage_space,missing,堆肥站旁沒有材料暫存處；場地每年向總務處續借,3,2026-10-25,user-2026-10-25
+field-ntu-compost:need:woodworking,field-ntu-compost,need,woodworking,missing,社團只會簡易木工；維修中心師傅專長是電器,3,2026-10-25,user-2026-10-25
+field-ntu-compost:need:wood_preservation,field-ntu-compost,need,wood_preservation,missing,,3,2026-10-25,user-2026-10-25
+field-ntu-compost:need:cargo_bike,field-ntu-compost,need,cargo_bike,missing,維修中心距離騎腳踏車約 10 分鐘，搬不動木材,3,2026-10-25,user-2026-10-25
+field-ntu-compost:need:hand_cart,field-ntu-compost,need,hand_cart,unknown,,3,2026-10-25,user-2026-10-25

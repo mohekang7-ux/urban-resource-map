@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 
 import geopandas as gpd
+import pandas as pd
 import shapely
 
 from common import PROCESSED, ROOT
@@ -59,6 +60,82 @@ def main() -> None:
     }
     (OUT / "meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"  輸出：{(OUT / 'meta.json').relative_to(ROOT)}")
+
+    export_nodes()
+    export_vocab()
+
+
+def _clean(v):
+    return None if pd.isna(v) else v
+
+
+def _display_category(label: str) -> str:
+    """地圖與清單用的簡短類別；完整的登記項目另外保留在 category。"""
+    if "特定工廠" in label:
+        return "工廠：" + label.split("（")[0]
+    has_hw, has_bm = "五金" in label, "建材" in label
+    return "五金建材行" if has_hw and has_bm else "五金行" if has_hw else "建材行" if has_bm else label
+
+
+def _write_features(dest, features) -> None:
+    dest.write_text(json.dumps({"type": "FeatureCollection", "features": features}, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    print(f"  輸出：{dest.relative_to(ROOT)}（{len(features)} 個據點，{dest.stat().st_size / 1e6:.2f} MB）")
+
+
+def export_nodes() -> None:
+    """網站用的據點，分兩種（2026-10-27 決定）：
+
+    - nodes_reference.geojson：「公開資料（參考）」模式用。只放商業登記與工廠中**高可信**的據點，
+      只有名稱、地址、登記類別等事實，不附任何推論的資源。
+    - nodes_verified.geojson：「找資源」模式用。只放現地確認或使用者填寫（verification ≥ 2）且公開的據點，
+      附上經確認的供給 resources（data/processed/field/resources_field.csv，還沒有時為空）
+      與需求 wants（data/processed/field/intents_field.csv，來自據點範本的需求清單）。
+    """
+    for old in ("nodes_ogdl.geojson", "nodes_osm.geojson", "nodes_field.geojson"):
+        (OUT / old).unlink(missing_ok=True)  # 舊版含推論資源的檔案
+
+    ref = pd.read_csv(PROCESSED / "ogdl" / "nodes.csv", dtype={"village_code": str, "business_id": str})
+    ref = ref[(ref["visibility"] == "public") & (ref["confidence"] == "high")]
+    _write_features(OUT / "nodes_reference.geojson", [
+        {"type": "Feature", "geometry": {"type": "Point", "coordinates": [round(r.lon, 6), round(r.lat, 6)]},
+         "properties": {"id": r.node_id, "name": r.name, "address": _clean(r.address), "category": r.category_label,
+                        "display_category": _display_category(r.category_label),
+                        "since_year": None if pd.isna(r.since_year) else int(r.since_year),
+                        "geocode_level": r.geocode_level, "source": r.source, "village_code": _clean(r.village_code)}}
+        for r in ref.itertuples()
+    ])
+
+    field = pd.read_csv(PROCESSED / "field" / "nodes_field.csv", dtype={"village_code": str})
+    field = field[(field["visibility"] == "public") & (field["verification"] >= 2)]
+    res_path = PROCESSED / "field" / "resources_field.csv"
+    res = pd.read_csv(res_path) if res_path.exists() else pd.DataFrame(columns=["node_id", "item_id", "access", "note", "verified_at"])
+    res = res[res["verification"] >= 2] if "verification" in res else res
+    res_by_node = {k: [{"item": r.item_id, "access": r.access, "note": _clean(r.note), "verified_at": _clean(r.verified_at)}
+                       for r in g.itertuples()] for k, g in res.groupby("node_id")}
+    intents_path = PROCESSED / "field" / "intents_field.csv"
+    intents = pd.read_csv(intents_path) if intents_path.exists() else pd.DataFrame(columns=["node_id", "direction"])
+    intents = intents[(intents["direction"] == "need") & (intents["verification"] >= 2)] if len(intents) else intents
+    needs_by_node = {k: [{"item": r.item_id, "status": r.status, "note": _clean(r.note)} for r in g.itertuples()]
+                     for k, g in intents.groupby("node_id")}
+    _write_features(OUT / "nodes_verified.geojson", [
+        {"type": "Feature", "geometry": {"type": "Point", "coordinates": [round(r.lon, 6), round(r.lat, 6)]},
+         "properties": {"id": r.node_id, "name": r.name, "address": _clean(r.address), "needs": str(r.needs).split(";"),
+                        "verification": int(r.verification), "verified_at": _clean(r.verified_at), "source": r.source,
+                        "village_code": _clean(r.village_code), "resources": res_by_node.get(r.node_id, []),
+                        "wants": needs_by_node.get(r.node_id, [])}}
+        for r in field.itertuples()
+    ])
+
+
+def export_vocab() -> None:
+    """網站用的詞表：需求分類、資源類別、項目、取得方式。"""
+    schema_dir = ROOT / "data" / "schema"
+    vocab = {
+        name: pd.read_csv(schema_dir / f"{name}.csv", dtype=str).fillna("").to_dict(orient="records")
+        for name in ("needs", "resource_classes", "resource_items", "access_modes")
+    }
+    (OUT / "vocab.json").write_text(json.dumps(vocab, ensure_ascii=False, indent=1), encoding="utf-8")
+    print(f"  輸出：{(OUT / 'vocab.json').relative_to(ROOT)}")
 
 
 if __name__ == "__main__":
