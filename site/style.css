@@ -57,6 +57,11 @@ select { width: 100%; font: inherit; font-size: 14px; padding: 6px 8px; border-r
 .bar-row { display: grid; grid-template-columns: 72px 1fr 44px; align-items: center; gap: 6px; font-size: 12px; margin: 3px 0; }
 .bar-track { height: 10px; background: var(--bg); border-radius: 3px; overflow: hidden; }
 .bar-fill { height: 100%; background: #534ab7; }
+.link-button {
+  display: inline-block; font-size: 13px; color: var(--accent); text-decoration: none;
+  border: 1px solid var(--accent); border-radius: var(--radius); padding: 6px 10px; margin-bottom: 6px;
+}
+.link-button:hover { background: var(--accent-bg); }
 .source { font-size: 11px; color: var(--text-3); margin-top: 16px; line-height: 1.5; border-top: 1px solid var(--border); padding-top: 8px; }
 .placeholder { border: 1px dashed var(--border); border-radius: var(--radius); padding: 12px; font-size: 13px; color: var(--text-2); line-height: 1.6; }
 
