@@ -1,0 +1,82 @@
+# 據點範本：台大社區堆肥站（第一個示範點）
+# 欄位說明見 data/schema/fields.csv 與 docs/resource-database.md。
+# bill_of_needs 是維持運作所需的資源清單；item_id 必須存在於 data/schema/resource_items.csv。
+# status：have 已有、missing 缺、partial 部分有、unknown 待查
+
+node:
+  node_id: field-ntu-compost
+  name: 台大社區堆肥站
+  lon: 121.5397753
+  lat: 25.019594
+  needs: [community]
+  status: open
+  confidence: high
+  verification: 3
+  verified_at: 2026-10-25
+  visibility: public
+  source: [user-2026-10-25]
+  license: CC-BY-4.0
+
+practice: composting
+updated: 2026-10-27
+
+bill_of_needs:
+  # 物料
+  - item_id: durable_lumber
+    status: missing
+    note: 現有箱體用廢棄棧板製作，已腐朽、鬆脫
+  - item_id: pallets
+    status: unknown
+    note: 若沿用棧板，需確認 IPPC 標記為 HT
+  - item_id: hardware_parts
+    status: missing
+    note: 螺絲、鉸鍊，修箱體與蓋子
+  - item_id: wood_finish
+    status: missing
+  - item_id: mesh
+    status: unknown
+  - item_id: wood_chips
+    status: have
+    current_source: 林產館（「林產管」待確認）
+  - item_id: fallen_leaves
+    status: have
+    current_source: 校園落葉
+  - item_id: food_scraps
+    status: partial
+    note: 學生自帶為主，量不多
+  - item_id: coffee_grounds
+    status: unknown
+  # 工具與空間
+  - item_id: power_drill
+    status: partial
+    current_source: 社區維修中心（每週六）
+  - item_id: saw
+    status: partial
+    current_source: 社區維修中心（每週六）
+  - item_id: hand_tools
+    status: partial
+    current_source: 社區維修中心（每週六）
+  - item_id: workshop_space
+    status: partial
+    current_source: 社區維修中心（每週六）
+  - item_id: storage_space
+    status: missing
+    note: 堆肥站旁沒有材料暫存處；場地每年向總務處續借
+  - item_id: compost_offtake
+    status: have
+    current_source: 堆肥站旁的土地
+  # 技能與知識
+  - item_id: woodworking
+    status: missing
+    note: 社團只會簡易木工；維修中心師傅專長是電器
+  - item_id: wood_preservation
+    status: missing
+  - item_id: compost_management
+    status: have
+    current_source: 社團
+  # 運輸
+  - item_id: cargo_bike
+    status: missing
+    note: 維修中心距離騎腳踏車約 10 分鐘，搬不動木材
+  - item_id: hand_cart
+    status: unknown

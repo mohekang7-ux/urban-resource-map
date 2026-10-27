@@ -1,0 +1,33 @@
+item_id,class_id,name_zh,description,in_compost_bill
+lumber,material,木材,新木料（板材、角材）,yes
+durable_lumber,material,耐腐木材,較耐腐的木料，例如國產材或防腐處理材,yes
+pallets,material,棧板,可拆解再利用的木棧板（優先 HT 熱處理，避免 MB 燻蒸）,yes
+wood_offcuts,material,木材邊角料,木作剩下的短料、碎料,yes
+hardware_parts,material,五金零件,螺絲、鉸鍊、角鐵、扣具等,yes
+wood_finish,material,防腐防水塗料,護木漆、防水漆等,yes
+mesh,material,網材,防蟲網、鐵絲網,yes
+building_materials,material,建材,板材以外的建材，例如磁磚、管材,no
+metal_scrap,material,金屬廢料,可再利用的金屬邊料,no
+cardboard,material,紙板紙箱,乾淨的紙箱，可當碳源,yes
+wood_chips,material,木屑,木作或修剪產生的木屑，可當碳源,yes
+fallen_leaves,material,落葉與修剪枝葉,可當碳源,yes
+food_scraps,material,廚餘與蔬果殘渣,可當氮源,yes
+coffee_grounds,material,咖啡渣,可當氮源,yes
+power_drill,tool,電鑽,電鑽或起子機,yes
+saw,tool,鋸子與切割機,手鋸、圓鋸、線鋸等,yes
+hand_tools,tool,手工具,鎚子、捲尺、夾具等,yes
+welder,tool,焊接設備,電焊等,no
+digital_fabrication,tool,數位製造設備,雷射切割、3D 列印、CNC,no
+workshop_space,space,作業空間,可以施工、組裝的空間,yes
+storage_space,space,暫存空間,暫放材料或成品的空間,yes
+compost_offtake,space,堆肥去化空間,可以接收成品堆肥的綠地、園圃、花圃,yes
+woodworking,skill,木作,裁切、組裝、木工修繕,yes
+metalworking,skill,金屬加工,焊接、鐵件加工,no
+appliance_repair,skill,電器維修,家電、小型電器修理,no
+general_repair,skill,一般修繕,水電、門窗、家具等日常修繕,no
+compost_management,knowledge,堆肥管理,碳氮比、翻堆、病蟲害處理,yes
+wood_preservation,knowledge,木材防腐,材料選擇、塗裝、結構設計,yes
+cargo_bike,transport,貨運自行車,可載重的自行車或三輪車,yes
+hand_cart,transport,手推車與拖車,手推車、自行車拖車,yes
+small_truck,transport,小貨車,小貨車租借或司機服務,no
+delivery_service,transport,貨運與搬家服務,付費運送,no

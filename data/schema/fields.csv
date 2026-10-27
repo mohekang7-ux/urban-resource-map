@@ -1,0 +1,29 @@
+table,field,type,required,allowed,description
+nodes,node_id,string,yes,,唯一代碼：來源前綴加原始代碼，例如 gcis-12345678、fac-63021895、spf-S6300022、osm-n123、field-0001
+nodes,name,string,yes,,據點名稱
+nodes,address,string,no,,地址
+nodes,lon,number,yes,121.4–121.7,經度（WGS84）
+nodes,lat,number,yes,24.9–25.3,緯度（WGS84）
+nodes,village_code,string,no,,所在村里代碼（11 碼），由座標判斷
+nodes,needs,list,yes,needs.csv,需求分類，可多選，以分號分隔
+nodes,source_category,string,no,,來源的原始分類，例如 F206010、25、craft=carpenter
+nodes,business_id,string,no,,統一編號
+nodes,since_year,integer,no,,開業或登記年（西元）
+nodes,status,enum,yes,open;closed;unknown,營業狀態
+nodes,confidence,enum,yes,high;medium;low,依規則推估的可信度
+nodes,verification,integer,yes,0;1;2;3,0 未驗證、1 開放資料、2 現地確認、3 當事人確認
+nodes,verified_at,date,no,,最後確認日期（YYYY-MM-DD）
+nodes,visibility,enum,yes,public;aggregate;private,public 公開、aggregate 只出現在統計、private 只給團隊
+nodes,source,list,yes,,資料來源代碼，可多個，以分號分隔
+nodes,license,enum,yes,OGDL-1.0;ODbL-1.0;CC-BY-4.0;private,授權
+resources,resource_id,string,yes,,唯一代碼，例如 node_id 加項目代碼
+resources,node_id,string,yes,nodes.node_id,所屬據點
+resources,class_id,enum,yes,resource_classes.csv,資源類別
+resources,item_id,enum,yes,resource_items.csv,資源項目
+resources,access,list,yes,access_modes.csv,取得方式，可多選，以分號分隔
+resources,note,string,no,,補充說明，例如「每週六」「需預約」
+resources,inferred,boolean,yes,true;false,是否由來源分類推論而來（true 表示未實際確認）
+resources,confidence,enum,yes,high;medium;low,可信度
+resources,verification,integer,yes,0;1;2;3,同 nodes
+resources,verified_at,date,no,,最後確認日期
+resources,source,list,yes,,資料來源代碼

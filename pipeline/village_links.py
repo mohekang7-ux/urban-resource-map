@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import re
+import time
 
 import pandas as pd
 import requests
@@ -53,6 +54,56 @@ def fetch(force: bool = False) -> pd.DataFrame:
             rows[n] = {"village": name, "district": district_of.get(n), "li_url": f"{BASE_URL}cp.aspx?n={n}"}
     out = pd.DataFrame(rows.values())
     print(f"  臺北市鄰里服務網：{len(out)} 個里的頁面連結（{out['district'].isna().sum()} 個需用里名對應）")
+    return out
+
+
+CHIEF_LINK = re.compile(r'href="(News\.aspx\?n=[0-9A-F]+&(?:amp;)?sms=[0-9A-F]+)"[^>]*title="里長簡介"')
+
+
+def fetch_chief_links(links: pd.DataFrame, force: bool = False, delay: float = 0.5) -> pd.DataFrame:
+    """逐一讀取各里頁面，取出「里長簡介」分頁的網址。
+
+    約 456 個頁面，每頁間隔 delay 秒，避免造成網站負擔。結果存在 chief_links.csv，
+    之後執行會直接沿用，只補抓還沒有的里；加 --force 才全部重抓。
+    """
+    cache_path = RAW / "village_links" / "chief_links.csv"
+    cache = {} if force or not cache_path.exists() else pd.read_csv(cache_path).set_index("li_url")["li_chief_url"].to_dict()
+
+    def save() -> pd.DataFrame:
+        out = pd.DataFrame({"li_url": list(cache), "li_chief_url": list(cache.values())})
+        out.to_csv(cache_path, index=False)
+        return out
+
+    # 抓取失敗的頁面不寫入快取，下次執行會再試
+    todo = [u for u in links["li_url"] if pd.isna(cache.get(u))]
+    if todo:
+        print(f"  讀取 {len(todo)} 個里頁面以取得里長簡介連結（約 {len(todo) * (delay + 1.5) / 60:.0f} 分鐘）", flush=True)
+    failed = []
+    for i, url in enumerate(todo, 1):
+        html = None
+        for wait in (5, 15, 45):  # 失敗時等待後重試
+            try:
+                resp = requests.get(url, headers=HEADERS, timeout=60)
+                resp.raise_for_status()
+                html = resp.text
+                break
+            except requests.RequestException as e:
+                print(f"    重試（{e.__class__.__name__}）：{url}", flush=True)
+                time.sleep(wait)
+        if html is None:
+            failed.append(url)
+        else:
+            m = CHIEF_LINK.search(html)
+            cache[url] = BASE_URL + m.group(1).replace("&amp;", "&") if m else None
+        if i % 25 == 0:
+            save()  # 每 25 頁存檔一次，中斷時不會全部重來
+            print(f"    {i}/{len(todo)}", flush=True)
+        time.sleep(delay)
+
+    out = save()
+    if failed:
+        print(f"  警告：{len(failed)} 個頁面讀取失敗，下次執行會再試")
+    print(f"  里長簡介連結：{out['li_chief_url'].notna().sum()} / {len(links)}")
     return out
 
 

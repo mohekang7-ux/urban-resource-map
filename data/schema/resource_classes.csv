@@ -1,0 +1,7 @@
+class_id,name_zh,description
+material,物料,可以買、拿或交換的東西，包括廢料與副產物
+tool,工具,可以借用或租用的工具與設備
+space,空間,作業、暫存或可接收成品的空間
+skill,技能,做或修的能力（掛在據點或組織下，不建個人檔案）
+knowledge,知識,可以請教的專業知識或經驗
+transport,運輸,搬運物品的載具或服務

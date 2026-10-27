@@ -35,7 +35,7 @@ def main() -> None:
 
     vil = gpd.read_file(SRC / "taipei_villages.geojson")
     pyramid_cols = [c for c in vil.columns if c.startswith("age_")]
-    keep = ["village_code", "district", "village", "li_url", "households", "pop_male", "pop_female", "area_km2"]
+    keep = ["village_code", "district", "village", "li_url", "li_chief_url", "households", "pop_male", "pop_female", "area_km2"]
     vil = vil[keep + INDICATORS + pyramid_cols + ["geometry"]]
     write_geojson(vil, OUT / "villages.geojson")
 

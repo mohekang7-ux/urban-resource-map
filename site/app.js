@@ -144,10 +144,12 @@ function showVillage(f) {
     <p class="sub">中位數 ${fmt(p.income_median)}・平均數 ${fmt(p.income_mean)}・第一分位數 ${fmt(p.income_q1)}・第三分位數 ${fmt(p.income_q3)}</p>
 
     <h3>里長與里辦公處</h3>
-    ${p.li_url
-      ? `<a class="link-button" href="${p.li_url}" target="_blank" rel="noopener">在臺北市鄰里服務網查看${p.village}的里長簡介 ↗</a>`
-      : `<p class="sub">找不到這個里的官方頁面。</p>`}
-    <p class="sub">里長姓名與聯絡方式以官方頁面為準，本平台不另外收錄。115 年 11 月 28 日里長改選後，示範點周邊的里會補上經確認的里辦公處聯絡方式。</p>
+    ${p.li_chief_url
+      ? `<a class="link-button" href="${p.li_chief_url}" target="_blank" rel="noopener">${p.village}里長簡介（臺北市鄰里服務網）↗</a>`
+      : p.li_url
+        ? `<a class="link-button" href="${p.li_url}" target="_blank" rel="noopener">${p.village}的官方頁面（臺北市鄰里服務網）↗</a>`
+        : `<p class="sub">找不到這個里的官方頁面。</p>`}
+    <p class="sub">里長姓名與聯絡方式以官方頁面為準，本平台不另外收錄；里長簡介由各里自行維護，部分內容可能較久未更新。115 年 11 月 28 日里長改選後，示範點周邊的里會補上經確認的里辦公處聯絡方式。</p>
 
     <h3>製造與供應據點</h3>
     <div class="placeholder">據點資料（五金行、工廠、維修中心等）還沒接入。下一步會先加入商業登記、工廠清冊與 OpenStreetMap。</div>

@@ -47,6 +47,8 @@ def main(force: bool = False) -> None:
     report_missing(vil, "income_median", "所得資料")
 
     vil = village_links.attach(vil, village_links.fetch(force))
+    vil = vil.merge(village_links.fetch_chief_links(vil[["li_url"]].dropna(), force), on="li_url", how="left")
+    report_missing(vil, "li_chief_url", "里長簡介連結")
     report_missing(vil, "li_url", "鄰里服務網連結")
 
     vil["area_km2"] =(vil.to_crs(3826).area / 1e6).round(3)
