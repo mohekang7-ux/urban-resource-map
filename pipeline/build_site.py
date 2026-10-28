@@ -122,7 +122,8 @@ def export_nodes() -> None:
                      for k, g in intents.groupby("node_id")}
     _write_features(OUT / "nodes_verified.geojson", [
         {"type": "Feature", "geometry": {"type": "Point", "coordinates": [round(r.lon, 6), round(r.lat, 6)]},
-         "properties": {"id": r.node_id, "name": r.name, "address": _clean(r.address), "needs": str(r.needs).split(";"),
+         "properties": {"id": r.node_id, "name": r.name, "address": _clean(r.address), "needs": [n for n in str(_clean(r.needs) or "").split(";") if n],
+                        "classes": [c for c in str(_clean(getattr(r, "classes", None)) or "").split(";") if c],
                         "node_type": _clean(getattr(r, "node_type", None)), "description": _clean(getattr(r, "description", None)),
                         "contact": _clean(getattr(r, "contact", None)),
                         "verification": int(r.verification), "verified_at": _clean(r.verified_at), "source": r.source,

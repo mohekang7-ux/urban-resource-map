@@ -69,7 +69,9 @@ def main() -> int:
     nodes = pd.DataFrame({
         "node_id": raw["node_id"], "name": raw["name"], "node_type": raw["node_type"],
         "address": raw["address"].replace("", None), "lon": raw["lon"].astype(float), "lat": raw["lat"].astype(float),
-        "needs": raw["needs"].map(lambda v: ";".join(v)), "description": raw["description"].replace("", None),
+        # 2026-10-28 起據點勾選「別人能從你這裡獲得什麼」（資源類別），不再使用需求分類
+        "needs": None, "classes": raw.get("classes", pd.Series([[]] * len(raw))).map(lambda v: ";".join(v) or None),
+        "description": raw["description"].replace("", None),
         "contact": raw["contact"].replace("", None),
         "source_category": "portal", "category_label": None, "business_id": None, "since_year": None,
         "status": "open", "confidence": "high", "verification": 3,

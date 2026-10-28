@@ -83,6 +83,7 @@ select { width: 100%; font: inherit; font-size: 14px; padding: 6px 8px; border-r
 }
 input[type="search"] { width: 100%; font: inherit; font-size: 14px; padding: 6px 8px; border-radius: var(--radius); border: 1px solid var(--border); }
 .check { display: flex; gap: 6px; align-items: flex-start; font-size: 13px; color: var(--text-2); margin: 10px 0 6px; }
+.node-classes { margin: 8px 0 2px; }
 .need-legend { display: flex; gap: 14px; margin: 4px 0 10px; }
 .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; border: 2px solid; margin-right: 4px; vertical-align: -1px; }
 .result {

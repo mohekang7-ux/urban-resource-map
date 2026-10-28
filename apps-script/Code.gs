@@ -23,7 +23,7 @@
 const SHEETS = {
   nodes: ['node_id', 'name', 'node_type', 'needs', 'address', 'lon', 'lat', 'description',
           'contact_public', 'contact_text', 'email', 'consent', 'status', 'created_at', 'updated_at',
-          'updated_by', 'last_confirmed_at'],
+          'updated_by', 'last_confirmed_at', 'classes'],
   offers: ['offer_id', 'node_id', 'item_id', 'access', 'conditions', 'status', 'created_at', 'updated_at',
            'created_by', 'updated_by', 'last_confirmed_at'],
   wants: ['want_id', 'node_id', 'item_id', 'status', 'note', 'created_at', 'updated_at',
@@ -154,7 +154,8 @@ const ACTIONS = {
       const record = {
         name: requireText(p.name, '據點名稱', 60),
         node_type: requireEnum(p.node_type, Object.keys(NODE_TYPES), '據點類型'),
-        needs: requireList(p.needs, vocab.needs.map((n) => n.need_id), '據點屬性').join(';'),
+        // 2026-10-28 起：別人能從這裡獲得哪些類別的資源（資源類別，可不選）；舊的 needs 欄位保留不再寫入
+        classes: optionalList(p.classes, vocab.resource_classes.map((c) => c.class_id), '資源類別').join(';'),
         address: cleanText(p.address, 120),
         description: cleanText(p.description, MAX_TEXT),
         contact_public: p.contact_public === true,
@@ -302,7 +303,7 @@ function exportPublic() {
       const individual = n.node_type === 'individual';
       const round = (v) => (individual ? Math.round(Number(v) * 100) / 100 : Number(v));
       return {
-        node_id: n.node_id, name: n.name, node_type: n.node_type, needs: String(n.needs).split(';').filter(String),
+        node_id: n.node_id, name: n.name, node_type: n.node_type, classes: String(n.classes || '').split(';').filter(String),
         address: individual ? '' : n.address, lon: round(n.lon), lat: round(n.lat), description: n.description,
         contact: n.contact_public === true ? n.contact_text : '', created_at: iso(n.created_at), updated_at: iso(n.updated_at),
         updated_by: n.updated_by || '', last_confirmed_at: iso(n.last_confirmed_at || n.updated_at),
@@ -444,6 +445,12 @@ function requireText(v, label, max) {
 function requireEnum(v, allowed, label) {
   if (!allowed.includes(v)) throw new Error(`${label}的選項不正確。`);
   return v;
+}
+
+function optionalList(v, allowed, label) {
+  const list = (Array.isArray(v) ? v : [v]).filter(Boolean);
+  list.forEach((x) => requireEnum(x, allowed, label));
+  return list;
 }
 
 function requireList(v, allowed, label) {

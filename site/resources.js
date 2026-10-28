@@ -7,9 +7,10 @@
 
 const CFG = window.APP_CONFIG || { apiUrl: "", googleClientId: "", staleDays: 90 };
 const MOCK = new URLSearchParams(location.search).has("mock");
-const NEED_COLORS = {
-  buy_materials: "#BA7517", make_repair: "#D85A30", borrow: "#0F6E56",
-  transport: "#185FA5", reuse: "#3B6D11", community: "#534AB7",
+// 資源類別的顏色（地圖點、清單、篩選）
+const CLASS_COLORS = {
+  material: "#A16207", tool: "#185FA5", space: "#534AB7",
+  skill: "#993556", knowledge: "#0F766E", transport: "#475569",
 };
 const NODE_TYPES = { shop: "店家", workshop: "工作室或工坊", community: "社區組織或社區據點", school: "學校或校內單位", public: "公部門或公共設施", individual: "個人", other: "其他" };
 const WANT_STATUS = { missing: "缺", partial: "部分有", unknown: "待查", fulfilled: "已滿足" };
@@ -17,7 +18,7 @@ const OFFER_STATUS = { active: "提供中", paused: "暫停提供" };
 const KIND_LABEL = { comment: "留言", response: "回應需求", still: "確認還在", gone: "回報已經沒有了" };
 
 let nodes = null, vocab = null, networkLoading = null, selectedNodeId = null, placing = null, placeMarker = null;
-const rf = { needs: new Set(), item: "", query: "", direction: "all" };
+const rf = { classes: new Set(), query: "", direction: "all" };
 const auth = { token: null, exp: 0, name: "" };
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -45,12 +46,20 @@ function geojsonToExport(gj) {
   const out = { nodes: [], offers: [], wants: [], comments: [] };
   gj.features.forEach((f) => {
     const p = f.properties;
-    out.nodes.push({ node_id: p.id, name: p.name, node_type: p.node_type, needs: p.needs, address: p.address, description: p.description,
+    out.nodes.push({ node_id: p.id, name: p.name, node_type: p.node_type, classes: p.classes || [], address: p.address, description: p.description,
       contact: p.contact, lon: f.geometry.coordinates[0], lat: f.geometry.coordinates[1], last_confirmed_at: p.verified_at, updated_by: "" });
     p.resources.forEach((r, i) => out.offers.push({ offer_id: `${p.id}:o${i}`, node_id: p.id, item_id: r.item, access: r.access, conditions: r.note, last_confirmed_at: r.verified_at }));
     p.wants.forEach((w, i) => out.wants.push({ want_id: `${p.id}:w${i}`, node_id: p.id, item_id: w.item, status: w.status, note: w.note, last_confirmed_at: p.verified_at }));
   });
   return out;
+}
+
+// 別人能從這個據點獲得的資源類別：據點自己勾選的；沒勾選時用它登記的「提供」所屬的類別
+function nodeClasses(n, offers) {
+  const own = Array.isArray(n.classes) ? n.classes : String(n.classes || "").split(";");
+  const list = own.filter(Boolean);
+  const found = list.length ? list : offers.map((o) => vocab.itemById[o.item_id]?.class_id);
+  return vocab.resource_classes.map((c) => c.class_id).filter((c) => found.includes(c));
 }
 
 function buildFeatures(data) {
@@ -59,7 +68,7 @@ function buildFeatures(data) {
   return data.nodes.map((n, i) => ({
     type: "Feature", id: i, geometry: { type: "Point", coordinates: [Number(n.lon), Number(n.lat)] },
     properties: {
-      ...n, needs: Array.isArray(n.needs) ? n.needs : String(n.needs).split(";"), primary_need: (Array.isArray(n.needs) ? n.needs : String(n.needs).split(";"))[0],
+      ...n, classes: nodeClasses(n, offers[n.node_id] || []), primary_class: nodeClasses(n, offers[n.node_id] || [])[0] || "",
       offers: offers[n.node_id] || [], wants: wants[n.node_id] || [],
       comments: (comments[n.node_id] || []).sort((a, b) => String(b.created_at).localeCompare(a.created_at)),
       stale: isStale(n.last_confirmed_at) ? 1 : 0,
@@ -186,8 +195,8 @@ async function busy(button, fn, box) {
   try { await fn(); } catch (e) { if (box) showMsg(box, e.message); else alert(e.message); } finally { button.disabled = false; }
 }
 
-function needBadges(needs) {
-  return needs.map((n) => `<span class="need-badge" style="--c:${NEED_COLORS[n] || "#888"}">${esc(vocab.needById[n]?.name_zh || n)}</span>`).join("");
+function classBadges(classes) {
+  return classes.map((c) => `<span class="need-badge" style="--c:${CLASS_COLORS[c] || "#888"}">${esc(vocab.classById[c]?.name_zh || c)}</span>`).join("");
 }
 
 function itemSelect(selected) {
@@ -201,8 +210,8 @@ function itemSelect(selected) {
 function ensureNodeLayers() {
   if (map.getSource("nodes")) return;
   map.addSource("nodes", { type: "geojson", data: nodes });
-  const color = ["match", ["get", "primary_need"]];
-  Object.entries(NEED_COLORS).forEach(([k, c]) => color.push(k, c));
+  const color = ["match", ["get", "primary_class"]];
+  Object.entries(CLASS_COLORS).forEach(([k, c]) => color.push(k, c));
   color.push("#888780");
   map.addLayer({
     id: "nodes-circle", type: "circle", source: "nodes", layout: { visibility: "none" },
@@ -232,7 +241,7 @@ function itemsOf(p) {
 }
 
 function matches(p) {
-  if (rf.needs.size && !p.needs.some((n) => rf.needs.has(n))) return false;
+  if (rf.classes.size && !p.classes.some((c) => rf.classes.has(c))) return false;
   const items = itemsOf(p);
   if (rf.direction !== "all" && !items.length) return false;
   if (rf.query && !String(p.name).includes(rf.query) && !items.some((i) => itemName(i).includes(rf.query))) return false;
@@ -254,9 +263,9 @@ function applyResourceFilter() {
       const p = f.properties;
       const counts = [p.wants.length && `<span class="cnt-want">需要 ${p.wants.length}</span>`, p.offers.length && `<span class="cnt-offer">提供 ${p.offers.length}</span>`].filter(Boolean).join(" ");
       return `<button class="result ${p.stale ? "is-stale" : ""}" data-id="${f.id}">
-        <span class="result-name"><span class="node-dot" style="background:${NEED_COLORS[p.primary_need] || "#888780"}"></span>${esc(p.name)}</span>
+        <span class="result-name"><span class="node-dot" style="background:${CLASS_COLORS[p.primary_class] || "#888780"}"></span>${esc(p.name)}</span>
         <span class="result-meta">${counts}</span>
-        <span class="result-sub">${esc(NODE_TYPES[p.node_type] || "")}${p.stale ? "・可能已過時" : ""}</span>
+        <span class="result-sub">${esc(NODE_TYPES[p.node_type] || "")}${p.classes.length ? `・可獲得：${p.classes.map((c) => esc(vocab.classById[c]?.name_zh || c)).join("、")}` : ""}${p.stale ? "・可能已過時" : ""}</span>
       </button>`;
     }).join("") || `<div class="placeholder">沒有符合的據點，可以換個關鍵字。</div>`);
   results.querySelectorAll(".result").forEach((btn) => btn.addEventListener("click", () => {
@@ -317,6 +326,7 @@ function showNode(f) {
       <div class="sub">${esc(NODE_TYPES[p.node_type] || "")}${p.address ? `・${esc(p.address)}` : ""}${p.node_type === "individual" ? "・位置只標到村里中心" : ""}</div>
       ${p.stale ? `<div class="stale-banner">超過 ${Math.round(CFG.staleDays / 30)} 個月沒有人確認，資料可能已過時。
         ${editable ? `<button class="link strong" data-act="still" data-type="node" data-id="${esc(p.node_id)}">我確認還在</button>` : ""}</div>` : ""}
+      ${p.classes.length ? `<div class="node-classes"><span class="sub">可以獲得：</span>${classBadges(p.classes)}</div>` : ""}
       ${p.description ? `<p class="desc">${esc(p.description)}</p>` : ""}
       <p class="contact">聯絡：${p.contact ? esc(p.contact) : "在下方留言，或請團隊轉介"}</p>
       <div id="node-editor"></div>
@@ -474,15 +484,16 @@ function placeAt(lngLat) {
 function openNodeForm(p, lngLat) {
   const isNew = !p;
   const target = isNew ? document.getElementById("node-detail") : document.getElementById("node-editor");
-  p = p || { needs: [], node_type: "" };
+  p = p || { classes: [], node_type: "" };
+  const ownClasses = Array.isArray(p.classes) ? p.classes : [];
   target.innerHTML = `<div class="editor">
     <h3>${isNew ? "新增據點" : "編輯據點資料"}</h3>
     <label class="field-label">據點名稱</label><input type="text" data-f="name" maxlength="60" value="${esc(p.name || "")}">
     <label class="field-label">據點類型</label>
     <select data-f="node_type"><option value="">請選擇</option>${Object.entries(NODE_TYPES).map(([k, v]) => `<option value="${k}" ${p.node_type === k ? "selected" : ""}>${v}</option>`).join("")}</select>
     <p class="note">選「個人」時不公開地址，位置只標到村里中心。</p>
-    <label class="field-label">別人可以在這裡做什麼？（可複選）</label>
-    <div class="checks">${vocab.needs.map((n) => `<label><input type="checkbox" data-need value="${n.need_id}" ${p.needs.includes(n.need_id) ? "checked" : ""}> ${esc(n.name_zh)}</label>`).join("")}</div>
+    <label class="field-label">別人能從你這裡獲得什麼？（可複選）</label>
+    <div class="checks">${vocab.resource_classes.map((c) => `<label title="${esc(c.description)}"><input type="checkbox" data-class value="${c.class_id}" ${ownClasses.includes(c.class_id) ? "checked" : ""}> ${esc(c.name_zh)}</label>`).join("")}</div>
     <label class="field-label">位置</label>
     <p class="note" id="pos-text">${isNew ? `已選擇：${lngLat[1].toFixed(5)}, ${lngLat[0].toFixed(5)}（可以再點地圖調整）` : `<button class="link" data-move>在地圖上重新選擇位置</button>`}</p>
     <details class="optional" ${isNew ? "" : "open"}><summary>地址、簡介、聯絡方式（選填）</summary>
@@ -510,13 +521,13 @@ function openNodeForm(p, lngLat) {
     const lngLatNew = placing?.lngLat;
     const node = {
       node_id: isNew ? null : p.node_id, name: get("name"), node_type: get("node_type"),
-      needs: [...ed.querySelectorAll("[data-need]:checked")].map((c) => c.value),
+      classes: [...ed.querySelectorAll("[data-class]:checked")].map((c) => c.value),
       address: get("address"), description: get("description"),
       contact_public: check("contact_public"), contact_text: get("contact_text"), consent: isNew ? check("consent") : true,
       position_changed: !!lngLatNew, lon: lngLatNew?.[0], lat: lngLatNew?.[1],
     };
     const problem = !node.name.trim() ? "請填寫據點名稱。" : !node.node_type ? "請選擇據點類型。"
-      : !node.needs.length ? "請至少選擇一個據點屬性。" : isNew && !node.consent ? "請勾選同意公開。"
+      : isNew && !node.consent ? "請勾選同意公開。"
       : node.contact_public && !node.contact_text.trim() ? "選擇公開聯絡方式時，請填寫聯絡方式。" : "";
     if (problem) return showMsg(ed, problem);
     busy(e.target, async () => {
@@ -540,9 +551,9 @@ function renderResourcePanel() {
         <div class="segmented" role="group" aria-label="供給或需求">
           ${[["all", "全部"], ["offer", "有提供"], ["need", "有需要"]].map(([k, l]) => `<button data-direction="${k}" class="dir-${k} ${rf.direction === k ? "on" : ""}">${l}</button>`).join("")}
         </div>
-        <details class="more-filters" ${rf.needs.size ? "open" : ""}><summary>依用途篩選${rf.needs.size ? `（${rf.needs.size}）` : ""}</summary>
-          <div class="need-filters">${vocab.needs.map((n) => `
-            <button class="need-toggle ${rf.needs.has(n.need_id) ? "on" : ""}" data-need="${n.need_id}" style="--c:${NEED_COLORS[n.need_id]}" title="${esc(n.question)}">${esc(n.name_zh)}</button>`).join("")}
+        <details class="more-filters" ${rf.classes.size ? "open" : ""}><summary>依資源類別篩選${rf.classes.size ? `（${rf.classes.size}）` : ""}</summary>
+          <div class="need-filters">${vocab.resource_classes.map((c) => `
+            <button class="need-toggle ${rf.classes.has(c.class_id) ? "on" : ""}" data-filter-class="${c.class_id}" style="--c:${CLASS_COLORS[c.class_id]}" title="${esc(c.description)}">${esc(c.name_zh)}</button>`).join("")}
           </div>
         </details>
       </div>
@@ -556,10 +567,10 @@ function renderResourcePanel() {
     applyResourceFilter();
   }));
   document.querySelectorAll(".need-toggle").forEach((btn) => btn.addEventListener("click", () => {
-    const n = btn.dataset.need;
-    rf.needs.has(n) ? rf.needs.delete(n) : rf.needs.add(n);
+    const c = btn.dataset.filterClass;
+    rf.classes.has(c) ? rf.classes.delete(c) : rf.classes.add(c);
     btn.classList.toggle("on");
-    document.querySelector(".more-filters summary").textContent = `依用途篩選${rf.needs.size ? `（${rf.needs.size}）` : ""}`;
+    document.querySelector(".more-filters summary").textContent = `依資源類別篩選${rf.classes.size ? `（${rf.classes.size}）` : ""}`;
     applyResourceFilter();
   }));
   let timer;

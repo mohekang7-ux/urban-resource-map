@@ -5,7 +5,8 @@ nodes,address,string,no,,地址
 nodes,lon,number,yes,121.4–121.7,經度（WGS84）
 nodes,lat,number,yes,24.9–25.3,緯度（WGS84）
 nodes,village_code,string,no,,所在村里代碼（11 碼），由座標判斷
-nodes,needs,list,yes,needs.csv,需求分類，可多選，以分號分隔
+nodes,needs,list,no,needs.csv,需求分類，可多選，以分號分隔（公開資料據點使用；填報據點 2026-10-28 起改用 classes）
+nodes,classes,list,no,resource_classes.csv,別人能從這個據點獲得的資源類別，可多選，以分號分隔（填報據點使用）
 nodes,source_category,string,no,,來源的原始分類，例如 F206010、25、craft=carpenter
 nodes,category_label,string,no,,來源分類的中文名稱，例如「五金零售業（商業登記）」，只描述登記或標註上的事實
 nodes,business_id,string,no,,統一編號

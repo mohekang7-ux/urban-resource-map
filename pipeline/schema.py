@@ -89,6 +89,10 @@ def validate_nodes(df: pd.DataFrame, vocab: Vocab) -> list[str]:
     bad_needs = {n for v in df["needs"] for n in split_list(v)} - vocab.needs
     if bad_needs:
         errors.append(f"nodes.needs 有未定義的分類：{sorted(bad_needs)}")
+    if "classes" in df.columns:
+        bad_classes = {c for v in df["classes"] for c in split_list(v)} - vocab.classes
+        if bad_classes:
+            errors.append(f"nodes.classes 有未定義的類別：{sorted(bad_classes)}")
     lon0, lat0, lon1, lat1 = TAIPEI_BBOX
     outside = df[~df["lon"].astype(float).between(lon0, lon1) | ~df["lat"].astype(float).between(lat0, lat1)]
     if len(outside):
