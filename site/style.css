@@ -1,4 +1,6 @@
 :root {
+  --want: #B4521E; --want-bg: #FDF1E8;
+  --offer: #0F6E56; --offer-bg: #E8F4EF;
   --bg: #f7f6f2;
   --surface: #ffffff;
   --text: #1f1e1c;
@@ -132,8 +134,23 @@ input[type="search"] { width: 100%; font: inherit; font-size: 14px; padding: 6px
 .entry-main { min-width: 0; }
 .entry-main .tag { margin-left: 4px; }
 .entry-actions { display: flex; align-items: center; gap: 4px; flex: none; }
-.small-btn { font: inherit; font-size: 12px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--accent); background: var(--surface); color: var(--accent); cursor: pointer; white-space: nowrap; }
-.small-btn:hover { background: var(--accent-bg); }
+.small-btn { font: inherit; font-size: 12px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--offer); background: var(--surface); color: var(--offer); cursor: pointer; white-space: nowrap; }
+.small-btn:hover { background: var(--offer-bg); }
+/* 需要（暖色）與提供（綠色） */
+.sec { border-left: 4px solid var(--c); background: var(--bg-c); border-radius: 0 var(--radius) var(--radius) 0; padding: 2px 10px 4px 12px; margin-top: 16px; }
+.sec-want { --c: var(--want); --bg-c: var(--want-bg); }
+.sec-offer { --c: var(--offer); --bg-c: var(--offer-bg); }
+.node-card .sec h3 { margin: 8px 0 2px; }
+.sec-label { font-size: 13px; font-weight: 600; color: #fff; background: var(--c); padding: 1px 10px; border-radius: 999px; }
+.sec .entry { border-bottom-color: rgba(0,0,0,.08); }
+.sec .entry:last-child { border-bottom: none; }
+.cnt-want, .cnt-offer { font-size: 11px; padding: 1px 7px; border-radius: 999px; }
+.cnt-want { color: var(--want); background: var(--want-bg); }
+.cnt-offer { color: var(--offer); background: var(--offer-bg); }
+.add-btn { font: inherit; font-size: 13px; padding: 4px 12px; border-radius: 999px; border: 1px dashed var(--c); background: var(--surface); color: var(--c); cursor: pointer; }
+.add-want { --c: var(--want); } .add-offer { --c: var(--offer); }
+.segmented button.dir-offer.on { background: var(--offer-bg); color: var(--offer); }
+.segmented button.dir-need.on { background: var(--want-bg); color: var(--want); }
 .more { position: relative; }
 .more summary { list-style: none; cursor: pointer; font-size: 16px; line-height: 1; color: var(--text-3); padding: 2px 6px; border-radius: 6px; }
 .more summary::-webkit-details-marker { display: none; }

@@ -252,7 +252,7 @@ function applyResourceFilter() {
   results.innerHTML = `<p class="count">${fmt(hits.length)} 個據點${nodes.live === false ? "（離線資料，可能不是最新）" : ""}</p>` +
     (hits.map((f) => {
       const p = f.properties;
-      const counts = [p.wants.length && `需要 ${p.wants.length}`, p.offers.length && `提供 ${p.offers.length}`].filter(Boolean).join("・");
+      const counts = [p.wants.length && `<span class="cnt-want">需要 ${p.wants.length}</span>`, p.offers.length && `<span class="cnt-offer">提供 ${p.offers.length}</span>`].filter(Boolean).join(" ");
       return `<button class="result ${p.stale ? "is-stale" : ""}" data-id="${f.id}">
         <span class="result-name"><span class="node-dot" style="background:${NEED_COLORS[p.primary_need] || "#888780"}"></span>${esc(p.name)}</span>
         <span class="result-meta">${counts}</span>
@@ -321,10 +321,10 @@ function showNode(f) {
       <p class="contact">聯絡：${p.contact ? esc(p.contact) : "在下方留言，或請團隊轉介"}</p>
       <div id="node-editor"></div>
 
-      ${wantsHtml ? `<h3>需要 <span class="n">${p.wants.length}</span></h3>${wantsHtml}` : ""}
-      ${offersHtml ? `<h3>提供 <span class="n">${p.offers.length}</span></h3>${offersHtml}` : ""}
+      ${wantsHtml ? `<section class="sec sec-want"><h3><span class="sec-label">需要</span><span class="n">${p.wants.length} 項・這個據點在找的</span></h3>${wantsHtml}</section>` : ""}
+      ${offersHtml ? `<section class="sec sec-offer"><h3><span class="sec-label">提供</span><span class="n">${p.offers.length} 項・這個據點可以給的</span></h3>${offersHtml}</section>` : ""}
       ${!wantsHtml && !offersHtml ? `<p class="sub empty">還沒有登記提供或需要的資源。</p>` : ""}
-      ${editable ? `<div class="row-actions"><button class="link" data-add-want>＋ 需要</button><button class="link" data-add-offer>＋ 提供</button></div>` : ""}
+      ${editable ? `<div class="row-actions"><button class="add-btn add-want" data-add-want>＋ 需要</button><button class="add-btn add-offer" data-add-offer>＋ 提供</button></div>` : ""}
       <div id="item-editor"></div>
 
       <h3>留言 ${shown.length ? `<span class="n">${shown.length}</span>` : ""}</h3>
@@ -538,7 +538,7 @@ function renderResourcePanel() {
       <input id="resource-query" type="search" placeholder="找什麼？例如：電鑽、棧板、木工" value="${esc(rf.query)}" aria-label="搜尋據點或資源">
       <div class="filter-row">
         <div class="segmented" role="group" aria-label="供給或需求">
-          ${[["all", "全部"], ["offer", "有提供"], ["need", "有需要"]].map(([k, l]) => `<button data-direction="${k}" class="${rf.direction === k ? "on" : ""}">${l}</button>`).join("")}
+          ${[["all", "全部"], ["offer", "有提供"], ["need", "有需要"]].map(([k, l]) => `<button data-direction="${k}" class="dir-${k} ${rf.direction === k ? "on" : ""}">${l}</button>`).join("")}
         </div>
         <details class="more-filters" ${rf.needs.size ? "open" : ""}><summary>依用途篩選${rf.needs.size ? `（${rf.needs.size}）` : ""}</summary>
           <div class="need-filters">${vocab.needs.map((n) => `
