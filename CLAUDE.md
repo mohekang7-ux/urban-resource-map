@@ -22,6 +22,7 @@
 - `docs/preface.md`：使用者撰寫的專案前言（原文，勿改寫）
 - `docs/project-plan.md`：以堆肥站為核心的專案規劃（2026-10-25 草案）
 - `docs/research-question.md`：研究問題的收斂提案（2026-10-26）
+- `docs/node-portal.md`：據點填報系統（Google Apps Script＋試算表）的設計與決定（2026-10-28）
 - `docs/resource-database.md`：資源資料庫架構（2026-10-27 第 2 版）：依使用者需求的六類據點分類、含運輸的資源類別、各資料集的可靠性評估、資料表、KoboToolbox 運作方式
 - `docs/platform-architecture.md`：網頁平台架構討論稿（2026-10-26）：資料模型、三層資料來源、技術選型、授權
 - `docs/context.md`：學術框架與國內外案例（2026-10-21 初始討論）
@@ -45,11 +46,12 @@
 - **網頁原型**在 `site/`：靜態網站，用 MapLibre GL JS 4.7.1 加上 OpenFreeMap positron 底圖（免金鑰）。
   - 先跑 `run_all.py` 和 `nodes.py`，再跑 `.venv/bin/python pipeline/build_site.py`，產生 `site/data/`（villages、zoning、meta、nodes_reference、nodes_verified、vocab）。
   - 本機預覽：`.claude/launch.json` 的 `site` 設定（`python -m http.server 8765 --directory site`）。
-  - **資料真實性原則（2026-10-27）**：公開資料不推論據點有哪些資源。「公開資料（參考）」模式只顯示高可信度的公開登記店家與工廠，只呈現事實；「資源網絡（已確認）」只放現地確認或據點本身填寫的資源，資料填入前為空。
-  - 只有兩個模式：「公開資料（參考）」與「資源網絡（已確認）」（2026-10-28 由「找資源」更名；程式在 `site/resources.js`，內部 mode 代碼仍是 `resources`）。「示範點」分頁已刪除。
+  - **資料真實性原則（2026-10-27）**：公開資料不推論據點有哪些資源。「我在一個怎樣的地方？」模式（公開資料，僅供參考）只顯示高可信度的公開登記店家與工廠，只呈現事實；「我附近有哪些夥伴？」模式只放現地確認或據點本身填寫的供給與需求，資料填入前為空。
+  - 只有兩個模式：「我在一個怎樣的地方？」（內部代碼 `explore`，原「探索鄰里」「公開資料（參考）」）與「我附近有哪些夥伴？」（內部代碼 `resources`，原「找資源」「資源網絡（已確認）」，程式在 `site/resources.js`）；2026-10-28 改為問句名稱。「示範點」分頁已刪除。
   - 資源網絡以**空間據點**為單位，每個據點可以有「提供」（resources）與「需要」（wants，來自 `data/processed/field/intents_field.csv`）。沒有固定地點的資源與個人，依 `docs/resource-database.md` 第十四節的例外規則處理。
-  - 堆肥站座標（121.5397753, 25.019594）取自使用者提供的 Google 地圖標記（地標名 NTU Roots & Shoots composting site）。使用者不需要範圍圈（2026-10-26）。堆肥站**不出現在公開資料版面**，它是「資源網絡（已確認）」中的一個據點，需求來自 `nodes/ntu-compost.yaml` 的需求清單（2026-10-28）。
-- **資源資料架構**：詞表、欄位定義、來源對照表在 `data/schema/`；據點範本（含需求清單）在 `nodes/*.yaml`；`.venv/bin/python pipeline/schema.py` 檢查一致性。新增資源項目或來源分類時，改 CSV 即可，再跑一次檢查。
+  - 堆肥站**只用據點填報系統管理**（2026-10-28 起）：網站上的「臺大根與芽堆肥據點」來自填報系統，舊的 `nodes/ntu-compost.yaml` 已刪除。堆肥站不出現在公開資料版面。
+- **據點填報系統**在 `apps-script/`（Code.gs、Vocab.gs、Index.html、appsscript.json；部署說明在 `apps-script/README.md`）。詞表改了要跑 `pipeline/apps_script_vocab.py` 重新產生 `Vocab.gs`。匯入：`pipeline/portal.py`（讀 `.env` 的 `PORTAL_EXPORT_URL`）。網站更新順序：`run_all.py` → `nodes.py` → `portal.py` → `build_site.py`。本機測試填報網頁用預覽設定 `portal-dev`（模擬後端）。**測試資料不要留在 `data/processed/field/`。**
+- **資源資料架構**：詞表、欄位定義、來源對照表在 `data/schema/`；據點範本 `nodes/*.yaml` 的機制保留（目前沒有任何範本，據點一律用填報系統管理）；`.venv/bin/python pipeline/schema.py` 檢查一致性。新增資源項目或來源分類時，改 CSV 即可，再跑一次檢查。
 - **資料夾**：`data/raw/` 放原始下載（不進 git）；`data/processed/ogdl|odbl|field/` 依授權分開存放衍生資料。
 - **金鑰**：放在本機 `.env`（範本是 `.env.example`），不進 git、不貼進對話。
 - 其他技術決策見 `docs/decisions.md` 和 `docs/platform-architecture.md`。

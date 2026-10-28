@@ -6,6 +6,12 @@
       "runtimeExecutable": ".venv/bin/python",
       "runtimeArgs": ["-m", "http.server", "8765", "--directory", "site"],
       "port": 8765
+    },
+    {
+      "name": "portal-dev",
+      "runtimeExecutable": ".venv/bin/python",
+      "runtimeArgs": ["-m", "http.server", "8766"],
+      "port": 8766
     }
   ]
 }

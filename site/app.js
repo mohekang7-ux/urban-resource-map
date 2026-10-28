@@ -1,4 +1,4 @@
-// 台北製造能力地圖（原型）：地圖、模式切換、「公開資料（參考）」模式（「資源網絡（已確認）」模式在 resources.js）
+// 台北製造能力地圖（原型）：地圖、模式切換、「我在一個怎樣的地方？」模式（「我附近有哪些夥伴？」模式在 resources.js）
 // 資料由 pipeline/build_site.py 產生，放在 site/data/
 // 公開資料只呈現登記上的事實與統計，不推論據點有哪些資源（2026-10-27 決定）。
 
@@ -203,7 +203,7 @@ function showReferenceNode(f) {
         <span class="tag">公開資料・未經現地確認</span>
         ${p.geocode_level === "road" ? `<span class="tag warn">位置只對到路段，可能有數百公尺誤差</span>` : ""}
       </div>
-      <p class="note">這筆資料只代表「有這家店的登記」。實際有什麼、能不能借或買，需要現地確認；確認後的資料會出現在「資源網絡（已確認）」。</p>
+      <p class="note">這筆資料只代表「有這家店的登記」。實際有什麼、能不能借或買，需要現地確認；確認後的資料會出現在「我附近有哪些夥伴？」。</p>
       <div class="source">來源：${String(p.source).split(";").map((s) => esc(REF_SOURCE_LABEL[s] || s)).join("、")}（政府資料開放授權條款第 1 版）</div>
     </div>`;
   const back = document.querySelector("[data-back]");
@@ -212,7 +212,7 @@ function showReferenceNode(f) {
 
 function showIntro() {
   document.getElementById("panel").innerHTML = `
-    <h2>公開資料（參考）</h2>
+    <h2>我在一個怎樣的地方？</h2>
     <p>這裡整理政府公開資料，作為了解鄰里的參考：村里的人口、性別、年齡、教育程度與所得，都市計畫使用分區，以及公開登記的店家與工廠。</p>
     <p class="sub">點選村里查看概況；左上角可以切換著色的指標。店家與工廠只顯示名稱與地址都像實體店面的高可信度登記資料，並且不推測它們有哪些資源。</p>
     <div class="metrics">
@@ -228,7 +228,7 @@ let currentMode = "explore";
 function setMode(mode) {
   if (currentMode === "resources" && mode !== "resources") exitResourceMode();
   currentMode = mode;
-  // 公開資料的店家只在參考模式顯示，避免和「資源網絡（已確認）」的確認資料混在一起
+  // 公開資料的店家只在參考模式顯示，避免和「我附近有哪些夥伴？」的確認資料混在一起
   const showRef = mode === "explore" && document.getElementById("toggle-reference").checked;
   map.setLayoutProperty("reference-points", "visibility", showRef ? "visible" : "none");
   document.querySelectorAll(".mode").forEach((b) => b.classList.toggle("active", b.dataset.mode === mode));

@@ -292,9 +292,13 @@ def main(force: bool = False) -> int:
     if not osm_nodes.empty:
         official = link_osm_duplicates(official, osm_nodes)
         osm_nodes = assign_villages(osm_nodes)
-    official, field_nodes = assign_villages(official), assign_villages(field_nodes)
+    official = assign_villages(official)
+    if not field_nodes.empty:
+        field_nodes = assign_villages(field_nodes)
 
-    errors = schema.validate_nodes(official, vocab) + schema.validate_nodes(field_nodes, vocab)
+    errors = schema.validate_nodes(official, vocab)
+    if not field_nodes.empty:
+        errors += schema.validate_nodes(field_nodes, vocab)
     if not osm_nodes.empty:
         errors += schema.validate_nodes(osm_nodes, vocab)
     if errors:
@@ -305,8 +309,11 @@ def main(force: bool = False) -> int:
 
     official.to_csv(PROCESSED / "ogdl" / "nodes.csv", index=False)
     (PROCESSED / "field").mkdir(exist_ok=True)
-    field_nodes.to_csv(PROCESSED / "field" / "nodes_field.csv", index=False)
-    field_intents.to_csv(PROCESSED / "field" / "intents_field.csv", index=False)
+    for name, df in (("nodes_field.csv", field_nodes), ("intents_field.csv", field_intents)):
+        if df.empty:
+            (PROCESSED / "field" / name).unlink(missing_ok=True)  # 沒有據點範本時，不留舊檔
+        else:
+            df.to_csv(PROCESSED / "field" / name, index=False)
     if not osm_nodes.empty:
         (PROCESSED / "odbl").mkdir(exist_ok=True)
         osm_nodes.to_csv(PROCESSED / "odbl" / "nodes_osm.csv", index=False)

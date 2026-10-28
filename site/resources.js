@@ -1,4 +1,4 @@
-// 「資源網絡（已確認）」模式：只呈現經過現地確認或由據點本身提供的資料（verification ≥ 2）。
+// 「我附近有哪些夥伴？」模式：只呈現經過現地確認或由據點本身提供的資料（verification ≥ 2）。
 // 每個供給（resources）與需求（wants）都掛在一個空間據點上；公開資料不推論資源（2026-10-27 決定）。
 // 資料：site/data/nodes_verified.geojson 與 vocab.json，由 pipeline/build_site.py 產生。
 // 依賴 app.js 的全域變數 map、fmt。
@@ -133,7 +133,12 @@ function showNode(f) {
         <button class="close" aria-label="關閉" data-close>×</button>
       </div>
       <div class="node-needs">${needBadges(p.needs)}</div>
-      <div class="node-status"><span class="tag ok">${VERIFICATION_LABEL[p.verification]}${p.verified_at ? `・${esc(p.verified_at)}` : ""}</span></div>
+      <div class="node-status">
+        <span class="tag ${p.source === "portal" ? "" : "ok"}">${p.source === "portal" ? "據點自行填報，未經團隊確認" : VERIFICATION_LABEL[p.verification]}${p.verified_at ? `・${esc(p.verified_at)}` : ""}</span>
+        ${p.node_type === "individual" ? `<span class="tag">個人據點：位置只標到村里中心</span>` : ""}
+      </div>
+      ${p.description ? `<p class="sub">${esc(p.description)}</p>` : ""}
+      <p class="sub">聯絡方式：${p.contact ? esc(p.contact) : "請透過團隊轉介"}</p>
       <h3>提供</h3>
       ${offers || `<p class="sub">還沒有確認的供給。</p>`}
       <h3>需要</h3>
@@ -147,7 +152,7 @@ function renderResourcePanel() {
   const itemOptions = vocab.resource_classes.map((c) => `<optgroup label="${esc(c.name_zh)}">${
     vocab.resource_items.filter((i) => i.class_id === c.class_id).map((i) => `<option value="${i.item_id}">${esc(i.name_zh)}</option>`).join("")}</optgroup>`).join("");
   document.getElementById("panel").innerHTML = `
-    <h2>資源網絡（已確認）</h2>
+    <h2>我附近有哪些夥伴？</h2>
     <p class="sub">每個供給和需求都屬於一個實際的據點，只列出經過現地確認或由據點本身提供的資料。</p>
     <div class="segmented" role="group" aria-label="供給或需求">
       ${[["all", "全部"], ["offer", "提供"], ["need", "需要"]].map(([k, l]) =>
@@ -184,7 +189,7 @@ function renderResourcePanel() {
 }
 
 async function enterResourceMode() {
-  document.getElementById("panel").innerHTML = `<h2>資源網絡（已確認）</h2><p class="sub">載入中…</p>`;
+  document.getElementById("panel").innerHTML = `<h2>我附近有哪些夥伴？</h2><p class="sub">載入中…</p>`;
   await loadNodes();
   ensureNodeLayers();
   ["nodes-circle", "nodes-label"].forEach((id) => map.setLayoutProperty(id, "visibility", "visible"));

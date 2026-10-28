@@ -1,0 +1,8 @@
+resource_id,node_id,item_id,access,note,confidence,verification,verified_at,source,class_id
+portal-d727900b:offer:b22b33,portal-d727900b,general_repair,exchange,,high,3,2026-10-28,portal,skill
+portal-d727900b:offer:b8ab6f,portal-d727900b,wood_chips,exchange,,high,3,2026-10-28,portal,material
+portal-d727900b:offer:85ebc4,portal-d727900b,food_scraps,give,,high,3,2026-10-28,portal,material
+portal-d727900b:offer:0cacc5,portal-d727900b,coffee_grounds,give,,high,3,2026-10-28,portal,material
+portal-d727900b:offer:812ad7,portal-d727900b,power_drill,lend,,high,3,2026-10-28,portal,tool
+portal-d727900b:offer:afbaaf,portal-d727900b,compost_management,service,,high,3,2026-10-28,portal,knowledge
+portal-d727900b:offer:70a297,portal-d727900b,woodworking,service,,high,3,2026-10-28,portal,skill

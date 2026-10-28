@@ -1,0 +1,2 @@
+node_id,name,node_type,address,lon,lat,needs,description,contact,source_category,category_label,business_id,since_year,status,confidence,verification,verified_at,visibility,source,license,geocode_level,village_code
+portal-d727900b,臺大根與芽堆肥據點,school,,121.539665,25.019653,make_repair;borrow;reuse;community,,,portal,,,,open,high,3,2026-10-28,public,portal,CC-BY-4.0,source,63000030057

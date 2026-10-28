@@ -87,9 +87,9 @@ def export_nodes() -> None:
 
     - nodes_reference.geojson：「公開資料（參考）」模式用。只放商業登記與工廠中**高可信**的據點，
       只有名稱、地址、登記類別等事實，不附任何推論的資源。
-    - nodes_verified.geojson：「找資源」模式用。只放現地確認或使用者填寫（verification ≥ 2）且公開的據點，
-      附上經確認的供給 resources（data/processed/field/resources_field.csv，還沒有時為空）
-      與需求 wants（data/processed/field/intents_field.csv，來自據點範本的需求清單）。
+    - nodes_verified.geojson：「我附近有哪些夥伴？」模式用。只放現地確認或據點自行填報（verification ≥ 2）且公開的據點，
+      附上供給 resources 與需求 wants；來源是 data/processed/field/ 下的 *_field.csv（據點範本）
+      與 *_portal.csv（據點填報系統）。
     """
     for old in ("nodes_ogdl.geojson", "nodes_osm.geojson", "nodes_field.geojson"):
         (OUT / old).unlink(missing_ok=True)  # 舊版含推論資源的檔案
@@ -105,21 +105,26 @@ def export_nodes() -> None:
         for r in ref.itertuples()
     ])
 
-    field = pd.read_csv(PROCESSED / "field" / "nodes_field.csv", dtype={"village_code": str})
+    # 確認資料有兩個來源：據點範本（nodes/*.yaml → *_field.csv）與據點填報系統（pipeline/portal.py → *_portal.csv）
+    def read_all(kind: str, columns: list[str]) -> pd.DataFrame:
+        frames = [pd.read_csv(p, dtype={"village_code": str}) for p in sorted((PROCESSED / "field").glob(f"{kind}_*.csv"))]
+        return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=columns)
+
+    field = read_all("nodes", ["node_id"])
     field = field[(field["visibility"] == "public") & (field["verification"] >= 2)]
-    res_path = PROCESSED / "field" / "resources_field.csv"
-    res = pd.read_csv(res_path) if res_path.exists() else pd.DataFrame(columns=["node_id", "item_id", "access", "note", "verified_at"])
-    res = res[res["verification"] >= 2] if "verification" in res else res
+    res = read_all("resources", ["node_id", "item_id", "access", "note", "verified_at", "verification"])
+    res = res[res["verification"] >= 2]
     res_by_node = {k: [{"item": r.item_id, "access": r.access, "note": _clean(r.note), "verified_at": _clean(r.verified_at)}
                        for r in g.itertuples()] for k, g in res.groupby("node_id")}
-    intents_path = PROCESSED / "field" / "intents_field.csv"
-    intents = pd.read_csv(intents_path) if intents_path.exists() else pd.DataFrame(columns=["node_id", "direction"])
-    intents = intents[(intents["direction"] == "need") & (intents["verification"] >= 2)] if len(intents) else intents
+    intents = read_all("intents", ["node_id", "direction", "verification"])
+    intents = intents[(intents["direction"] == "need") & (intents["verification"] >= 2)]
     needs_by_node = {k: [{"item": r.item_id, "status": r.status, "note": _clean(r.note)} for r in g.itertuples()]
                      for k, g in intents.groupby("node_id")}
     _write_features(OUT / "nodes_verified.geojson", [
         {"type": "Feature", "geometry": {"type": "Point", "coordinates": [round(r.lon, 6), round(r.lat, 6)]},
          "properties": {"id": r.node_id, "name": r.name, "address": _clean(r.address), "needs": str(r.needs).split(";"),
+                        "node_type": _clean(getattr(r, "node_type", None)), "description": _clean(getattr(r, "description", None)),
+                        "contact": _clean(getattr(r, "contact", None)),
                         "verification": int(r.verification), "verified_at": _clean(r.verified_at), "source": r.source,
                         "village_code": _clean(r.village_code), "resources": res_by_node.get(r.node_id, []),
                         "wants": needs_by_node.get(r.node_id, [])}}

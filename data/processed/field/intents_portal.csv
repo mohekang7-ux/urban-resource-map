@@ -1,0 +1,5 @@
+intent_id,node_id,direction,item_id,status,note,verification,verified_at,source
+portal-d727900b:need:ee4f13,portal-d727900b,need,lumber,partial,,3,2026-10-28,portal
+portal-d727900b:need:9af2f5,portal-d727900b,need,pallets,missing,,3,2026-10-28,portal
+portal-d727900b:need:051822,portal-d727900b,need,saw,missing,,3,2026-10-28,portal
+portal-d727900b:need:8c576c,portal-d727900b,need,hand_cart,missing,,3,2026-10-28,portal
