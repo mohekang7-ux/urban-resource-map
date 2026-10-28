@@ -50,6 +50,7 @@
   - 只有兩個模式：「我在一個怎樣的地方？」（內部代碼 `explore`，原「探索鄰里」「公開資料（參考）」）與「我附近有哪些夥伴？」（內部代碼 `resources`，原「找資源」「資源網絡（已確認）」，程式在 `site/resources.js`）；2026-10-28 改為問句名稱。「示範點」分頁已刪除。
   - 資源網絡以**空間據點**為單位，每個據點可以有「提供」（resources）與「需要」（wants，來自 `data/processed/field/intents_field.csv`）。沒有固定地點的資源與個人，依 `docs/resource-database.md` 第十四節的例外規則處理。
   - 堆肥站**只用據點填報系統管理**（2026-10-28 起）：網站上的「臺大根與芽堆肥據點」來自填報系統，舊的 `nodes/ntu-compost.yaml` 已刪除。堆肥站不出現在公開資料版面。
+- **發布（2026-10-28）**：公開 repository <https://github.com/mohekang7-ux/urban-resource-map>（整個專案公開），網站 <https://mohekang7-ux.github.io/urban-resource-map/>。`.github/workflows/pages.yml` 在 `site/` 有變動並推送到 main 時自動發布。更新網站：跑完管線後 commit 並 `git push`。GitHub CLI 安裝在 `~/.local/bin/gh`（帳號 mohekang7-ux）。推送是對外公開的動作，推送前確認沒有 `.env` 或測試資料。
 - **據點填報系統**在 `apps-script/`（Code.gs、Vocab.gs、Index.html、appsscript.json；部署說明在 `apps-script/README.md`）。詞表改了要跑 `pipeline/apps_script_vocab.py` 重新產生 `Vocab.gs`。匯入：`pipeline/portal.py`（讀 `.env` 的 `PORTAL_EXPORT_URL`）。網站更新順序：`run_all.py` → `nodes.py` → `portal.py` → `build_site.py`。本機測試填報網頁用預覽設定 `portal-dev`（模擬後端）。**測試資料不要留在 `data/processed/field/`。**
 - **資源資料架構**：詞表、欄位定義、來源對照表在 `data/schema/`；據點範本 `nodes/*.yaml` 的機制保留（目前沒有任何範本，據點一律用填報系統管理）；`.venv/bin/python pipeline/schema.py` 檢查一致性。新增資源項目或來源分類時，改 CSV 即可，再跑一次檢查。
 - **資料夾**：`data/raw/` 放原始下載（不進 git）；`data/processed/ogdl|odbl|field/` 依授權分開存放衍生資料。
