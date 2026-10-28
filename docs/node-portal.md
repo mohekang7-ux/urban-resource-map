@@ -88,6 +88,7 @@ pipeline/portal.py → data/processed/field/*_portal.csv → pipeline/build_site
 ## 網站
 - 「我附近有哪些夥伴？」即時讀取 `…/exec?action=export`；讀不到時改用 `site/data/nodes_verified.geojson`（由 `pipeline/portal.py` 備份產生）。
 - 登入後：「在地圖上新增據點」（在地圖上點選位置）；據點卡上可以編輯據點、新增或編輯提供與需要、回報「還在」或「已經沒有了」、回應需求、留言。
+- 介面精簡（2026-10-28）：清單與據點卡輪流顯示；搜尋框取代資源項目下拉選單；用途篩選收進「依用途篩選」；每筆資源只留一個主要按鈕（需要：「我可以提供」），「還在／已經沒有了／編輯／刪除」收進「⋯」選單；只有過時的資料才標示時間；「確認還在」不列在留言中；選填欄位收合。留言者可以刪除自己的留言（`deleteComment`，軟刪除）。
 - 設定在 `site/config.js`：`apiUrl`、`googleClientId`、`staleDays`（90 天）。`googleClientId` 空白時網站維持唯讀。
 
 ## 測試

@@ -239,6 +239,18 @@ const ACTIONS = {
     });
   },
 
+  /** 刪除自己的留言（軟刪除，status 改為 deleted，不再匯出）。只有留言者本人可以刪除。 */
+  deleteComment(user, body) {
+    return withLock(() => {
+      const before = readRows('comments').find((c) => c.comment_id === body.comment_id && c.status === 'visible');
+      if (!before) throw new Error('找不到這則留言。');
+      if (before.author_email !== user.email) throw new Error('只能刪除自己的留言。');
+      updateRow('comments', 'comment_id', body.comment_id, { status: 'deleted' });
+      writeLog(user.email, 'deleteComment', 'comments', body.comment_id, before, null);
+      return true;
+    });
+  },
+
   /** 評論、回應需求、回報「還在」或「已經沒有了」。 */
   comment(user, body) {
     const name = displayName(user.email);

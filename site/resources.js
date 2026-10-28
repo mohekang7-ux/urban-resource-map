@@ -27,13 +27,6 @@ const isStale = (iso) => { const d = daysAgo(iso); return d === null || d > CFG.
 const loggedIn = () => !!auth.token && Date.now() < auth.exp && !!auth.name;
 const canEdit = () => MOCK || !!CFG.googleClientId;
 
-function freshness(iso, by) {
-  const d = daysAgo(iso);
-  if (d === null) return `<span class="fresh stale">尚未確認</span>`;
-  const when = d === 0 ? "今天" : `${d} 天前`;
-  return `<span class="fresh ${isStale(iso) ? "stale" : ""}">${isStale(iso) ? "可能已過時・" : ""}最後確認 ${when}${by ? `・${esc(by)}` : ""}</span>`;
-}
-
 // ---------- 資料：讀取與轉換 ----------
 
 async function fetchExport() {
@@ -172,11 +165,10 @@ function renderAuthBar() {
   const bar = document.getElementById("auth-bar");
   if (!bar) return;
   if (loggedIn()) {
-    bar.innerHTML = `<div class="auth-row"><span class="sub">已登入：${esc(auth.name)}</span>
-      <button class="primary-btn" data-new-node>＋ 在地圖上新增據點</button></div>`;
+    bar.innerHTML = `<div class="auth-row"><button class="primary-btn" data-new-node>＋ 新增據點</button><span class="sub">${esc(auth.name)}</span></div>`;
     bar.querySelector("[data-new-node]").addEventListener("click", startPlacing);
   } else {
-    bar.innerHTML = `<div class="auth-row"><span class="sub">登入後可以新增據點、編輯、留言與回報。</span><div id="gsi-button"></div></div>`;
+    bar.innerHTML = `<div class="auth-row"><span class="sub">登入後可以新增、回應與留言</span><div id="gsi-button"></div></div>`;
     initGoogleSignIn(document.getElementById("gsi-button"));
   }
 }
@@ -243,7 +235,6 @@ function matches(p) {
   if (rf.needs.size && !p.needs.some((n) => rf.needs.has(n))) return false;
   const items = itemsOf(p);
   if (rf.direction !== "all" && !items.length) return false;
-  if (rf.item && !items.includes(rf.item)) return false;
   if (rf.query && !String(p.name).includes(rf.query) && !items.some((i) => itemName(i).includes(rf.query))) return false;
   return true;
 }
@@ -254,19 +245,20 @@ function applyResourceFilter() {
   const hits = nodes.features.filter((f) => matches(f.properties));
   nodes.features.forEach((f) => map.setFeatureState({ source: "nodes", id: f.id }, { dim: !hits.includes(f) }));
   if (!nodes.features.length) {
-    results.innerHTML = `<div class="placeholder"><b>還沒有任何據點。</b><br>登入後按「在地圖上新增據點」，就能成為第一個。</div>`;
+    results.innerHTML = `<div class="placeholder"><b>還沒有任何據點。</b><br>登入後按「新增據點」，就能成為第一個。</div>`;
     return;
   }
   hits.sort((a, b) => String(a.properties.name).localeCompare(b.properties.name, "zh-Hant"));
-  results.innerHTML = `<p class="sub">符合 ${fmt(hits.length)} 個據點${nodes.live === false ? "（離線資料，可能不是最新）" : ""}</p>` +
+  results.innerHTML = `<p class="count">${fmt(hits.length)} 個據點${nodes.live === false ? "（離線資料，可能不是最新）" : ""}</p>` +
     (hits.map((f) => {
       const p = f.properties;
+      const counts = [p.wants.length && `需要 ${p.wants.length}`, p.offers.length && `提供 ${p.offers.length}`].filter(Boolean).join("・");
       return `<button class="result ${p.stale ? "is-stale" : ""}" data-id="${f.id}">
-        <span class="result-name">${esc(p.name)}</span>
-        <span class="result-meta">提供 ${p.offers.length}・需要 ${p.wants.length}</span>
-        <span class="result-needs">${needBadges(p.needs)}</span>
+        <span class="result-name"><span class="node-dot" style="background:${NEED_COLORS[p.primary_need] || "#888780"}"></span>${esc(p.name)}</span>
+        <span class="result-meta">${counts}</span>
+        <span class="result-sub">${esc(NODE_TYPES[p.node_type] || "")}${p.stale ? "・可能已過時" : ""}</span>
       </button>`;
-    }).join("") || `<div class="placeholder">沒有符合的據點，可以放寬篩選。</div>`);
+    }).join("") || `<div class="placeholder">沒有符合的據點，可以換個關鍵字。</div>`);
   results.querySelectorAll(".result").forEach((btn) => btn.addEventListener("click", () => {
     const f = nodes.features[Number(btn.dataset.id)];
     map.flyTo({ center: f.geometry.coordinates, zoom: Math.max(map.getZoom(), 15) });
@@ -276,88 +268,105 @@ function applyResourceFilter() {
 
 // ---------- 據點卡 ----------
 
+// 清單與據點卡輪流顯示，面板一次只呈現一件事
+function showDetail(on) {
+  document.getElementById("list-view").hidden = on;
+  if (!on) { document.getElementById("node-detail").innerHTML = ""; selectedNodeId = null; }
+}
+
 function showNode(f) {
   if (!f) return;
   const p = f.properties;
   selectedNodeId = p.node_id;
   const editable = loggedIn();
-  const actions = (type, id) => editable ? `
-      <button class="link" data-act="still" data-type="${type}" data-id="${esc(id)}">還在</button>
-      <button class="link" data-act="gone" data-type="${type}" data-id="${esc(id)}">已經沒有了</button>` : "";
-  const groupByClass = (list) => Object.entries(list.reduce((g, x) => ((g[vocab.itemById[x.item_id]?.class_id || "other"] ||= []).push(x), g), {}));
+  // 次要動作收進「⋯」選單
+  const more = (type, id, extra = "") => editable ? `<details class="more"><summary aria-label="更多動作">⋯</summary><div class="more-menu">
+      <button data-act="still" data-type="${type}" data-id="${esc(id)}">還在</button>
+      <button data-act="gone" data-type="${type}" data-id="${esc(id)}">已經沒有了</button>${extra}</div></details>` : "";
+  const staleTag = (iso) => (isStale(iso) ? `<span class="tag warn">可能已過時</span>` : "");
+  const accessText = (o) => String(o.access).split(";").map((a) => vocab.accessById[a]?.name_zh || a).join("、");
 
-  const offersHtml = groupByClass(p.offers).map(([cls, list]) => `<div class="lbl">${esc(vocab.classById[cls]?.name_zh || cls)}</div>` +
-    list.map((o) => `<div class="entry ${isStale(o.last_confirmed_at) ? "is-stale" : ""}">
-      <div><b>${esc(itemName(o.item_id))}</b> ${String(o.access).split(";").map((a) => `<span class="tag">${esc(vocab.accessById[a]?.name_zh || a)}</span>`).join("")}
-        ${o.conditions ? `<div class="sub">${esc(o.conditions)}</div>` : ""}
-        ${freshness(o.last_confirmed_at, o.updated_by)} ${goneCount(p, "offer", o.offer_id)}</div>
-      <div class="entry-actions">${actions("offer", o.offer_id)}
-        ${editable ? `<button class="link" data-edit-offer="${esc(o.offer_id)}">編輯</button><button class="link danger" data-del="offers" data-id="${esc(o.offer_id)}">刪除</button>` : ""}</div>
-    </div>`).join("")).join("");
+  const wantsHtml = p.wants.map((w) => `<div class="entry">
+      <div class="entry-main"><b>${esc(itemName(w.item_id))}</b>
+        ${w.status !== "missing" ? `<span class="tag">${esc(WANT_STATUS[w.status] || w.status)}</span>` : ""}${staleTag(w.last_confirmed_at)}
+        ${w.note ? `<div class="sub">${esc(w.note)}</div>` : ""}${responseCount(p, w.want_id)}</div>
+      <div class="entry-actions"><button class="small-btn" data-respond="${esc(w.want_id)}">我可以提供</button>
+        ${more("want", w.want_id, `<button data-edit-want="${esc(w.want_id)}">編輯</button><button class="danger" data-del="wants" data-id="${esc(w.want_id)}">刪除</button>`)}</div>
+    </div>`).join("");
 
-  const wantsHtml = groupByClass(p.wants).map(([cls, list]) => `<div class="lbl">${esc(vocab.classById[cls]?.name_zh || cls)}</div>` +
-    list.map((w) => `<div class="entry want ${isStale(w.last_confirmed_at) ? "is-stale" : ""}">
-      <div><b>${esc(itemName(w.item_id))}</b> <span class="tag">${esc(WANT_STATUS[w.status] || w.status)}</span>
-        ${w.note ? `<div class="sub">${esc(w.note)}</div>` : ""}
-        ${freshness(w.last_confirmed_at, w.updated_by)} ${responseCount(p, w.want_id)}</div>
+  const offersHtml = p.offers.map((o) => `<div class="entry">
+      <div class="entry-main"><b>${esc(itemName(o.item_id))}</b> ${staleTag(o.last_confirmed_at)}
+        <div class="sub">${esc(accessText(o))}${o.conditions ? `・${esc(o.conditions)}` : ""}</div>${goneCount(p, "offer", o.offer_id)}</div>
       <div class="entry-actions">
-        ${editable ? `<button class="link strong" data-respond="${esc(w.want_id)}">我可以提供</button>` : ""}
-        ${actions("want", w.want_id)}
-        ${editable ? `<button class="link" data-edit-want="${esc(w.want_id)}">編輯</button><button class="link danger" data-del="wants" data-id="${esc(w.want_id)}">刪除</button>` : ""}</div>
-    </div>`).join("")).join("");
+        ${more("offer", o.offer_id, `<button data-edit-offer="${esc(o.offer_id)}">編輯</button><button class="danger" data-del="offers" data-id="${esc(o.offer_id)}">刪除</button>`)}</div>
+    </div>`).join("");
 
-  const commentsHtml = p.comments.length ? p.comments.slice(0, 20).map((c) => `
-    <div class="comment kind-${esc(c.kind)}"><span class="comment-meta">${esc(c.author_name)}・${esc(KIND_LABEL[c.kind] || c.kind)}・${esc(String(c.created_at).slice(0, 10))}</span>
-      ${c.text ? `<div>${esc(c.text)}</div>` : ""}</div>`).join("") : `<p class="sub">還沒有動態。</p>`;
+  // 「確認還在」只更新時間，不列在留言裡
+  const shown = p.comments.filter((c) => c.kind !== "still");
+  const commentHtml = (c) => `<div class="comment kind-${esc(c.kind)}">
+      <span class="comment-meta">${esc(c.author_name)}${c.kind !== "comment" ? `・${esc(KIND_LABEL[c.kind] || c.kind)}` : ""}・${esc(String(c.created_at).slice(0, 10))}
+        ${editable && c.author_name === auth.name && c.comment_id ? `<button class="link danger" data-del-comment="${esc(c.comment_id)}">刪除</button>` : ""}</span>
+      ${c.text ? `<div>${esc(c.text)}</div>` : ""}</div>`;
 
+  const d = daysAgo(p.last_confirmed_at);
+  showDetail(true);
   document.getElementById("node-detail").innerHTML = `
     <div class="node-card">
-      <div class="node-head">
-        <div><div class="node-name">${esc(p.name)}</div><div class="sub">${esc(NODE_TYPES[p.node_type] || "")}${p.address ? `・${esc(p.address)}` : ""}</div></div>
-        <button class="close" aria-label="關閉" data-close>×</button>
-      </div>
-      <div class="node-needs">${needBadges(p.needs)}</div>
-      <div class="node-status">${freshness(p.last_confirmed_at, p.updated_by)}
-        ${p.node_type === "individual" ? `<span class="tag">個人據點：位置只標到村里中心</span>` : ""}</div>
-      ${p.description ? `<p class="sub">${esc(p.description)}</p>` : ""}
-      <p class="sub">聯絡方式：${p.contact ? esc(p.contact) : "請在下方留言，或透過團隊轉介"}</p>
-      ${editable ? `<div class="row-actions"><button class="link" data-edit-node>編輯據點資料</button>${actions("node", p.node_id)}</div>` : ""}
+      <button class="back" data-close>← 回到清單</button>
+      <div class="node-name">${esc(p.name)}</div>
+      <div class="sub">${esc(NODE_TYPES[p.node_type] || "")}${p.address ? `・${esc(p.address)}` : ""}${p.node_type === "individual" ? "・位置只標到村里中心" : ""}</div>
+      ${p.stale ? `<div class="stale-banner">超過 ${Math.round(CFG.staleDays / 30)} 個月沒有人確認，資料可能已過時。
+        ${editable ? `<button class="link strong" data-act="still" data-type="node" data-id="${esc(p.node_id)}">我確認還在</button>` : ""}</div>` : ""}
+      ${p.description ? `<p class="desc">${esc(p.description)}</p>` : ""}
+      <p class="contact">聯絡：${p.contact ? esc(p.contact) : "在下方留言，或請團隊轉介"}</p>
       <div id="node-editor"></div>
 
-      <h3>提供</h3>
-      ${offersHtml || `<p class="sub">還沒有提供的資源。</p>`}
-      ${editable ? `<button class="link" data-add-offer>＋ 新增提供的資源</button>` : ""}
-      <div id="offer-editor"></div>
+      ${wantsHtml ? `<h3>需要 <span class="n">${p.wants.length}</span></h3>${wantsHtml}` : ""}
+      ${offersHtml ? `<h3>提供 <span class="n">${p.offers.length}</span></h3>${offersHtml}` : ""}
+      ${!wantsHtml && !offersHtml ? `<p class="sub empty">還沒有登記提供或需要的資源。</p>` : ""}
+      ${editable ? `<div class="row-actions"><button class="link" data-add-want>＋ 需要</button><button class="link" data-add-offer>＋ 提供</button></div>` : ""}
+      <div id="item-editor"></div>
 
-      <h3>需要</h3>
-      ${wantsHtml || `<p class="sub">還沒有需要的資源。</p>`}
-      ${editable ? `<button class="link" data-add-want>＋ 新增需要的資源</button>` : ""}
-      <div id="want-editor"></div>
+      <h3>留言 ${shown.length ? `<span class="n">${shown.length}</span>` : ""}</h3>
+      ${editable ? `<div class="comment-form"><textarea id="comment-text" maxlength="500" placeholder="分享經驗、補充資訊或提出問題"></textarea>
+        <button class="primary-btn" data-comment>送出</button></div>` : ""}
+      ${shown.slice(0, 5).map(commentHtml).join("")}
+      ${shown.length > 5 ? `<button class="link" data-all-comments>顯示全部 ${shown.length} 則</button><div id="more-comments" hidden>${shown.slice(5).map(commentHtml).join("")}</div>` : ""}
+      ${!shown.length && !editable ? `<p class="sub">還沒有留言。</p>` : ""}
 
-      <h3>動態</h3>
-      ${editable ? `<div class="comment-form"><textarea id="comment-text" maxlength="500" placeholder="分享使用經驗、補充資訊或提出問題"></textarea>
-        <button class="primary-btn" data-comment>留言</button></div>` : `<p class="note">登入後可以留言。</p>`}
-      ${commentsHtml}
-      <p class="note">所有編輯都會留下紀錄並通知據點建立者。資料由使用者共同維護，超過 ${Math.round(CFG.staleDays / 30)} 個月沒人確認會標示「可能已過時」。</p>
+      <div class="card-foot">
+        <span>最後確認 ${d === null ? "—" : d === 0 ? "今天" : `${d} 天前`}${p.updated_by ? `・${esc(p.updated_by)}` : ""}</span>
+        ${editable ? `<span class="foot-actions"><button class="link" data-edit-node>編輯據點</button>${more("node", p.node_id)}</span>` : ""}
+      </div>
+      ${editable ? "" : `<p class="note">登入後可以回應需求、編輯與留言。</p>`}
     </div>`;
   bindCard(p);
-  document.getElementById("node-detail").scrollIntoView({ block: "nearest" });
+  document.getElementById("panel").scrollTop = 0;
 }
 
 function goneCount(p, type, id) {
   const n = p.comments.filter((c) => c.kind === "gone" && c.target_type === type && c.target_id === id).length;
-  return n ? `<span class="tag warn">${n} 人回報已經沒有了</span>` : "";
+  return n ? `<div><span class="tag warn">${n} 人回報已經沒有了</span></div>` : "";
 }
 
 function responseCount(p, wantId) {
   const n = p.comments.filter((c) => c.kind === "response" && c.target_id === wantId).length;
-  return n ? `<span class="tag ok">${n} 人回應可以提供</span>` : "";
+  return n ? `<div><span class="tag ok">${n} 人回應可以提供</span></div>` : "";
+}
+
+function requireLogin() {
+  if (loggedIn()) return true;
+  const bar = document.getElementById("auth-bar");
+  bar.scrollIntoView({ block: "nearest" });
+  bar.classList.remove("flash"); void bar.offsetWidth; bar.classList.add("flash");
+  return false;
 }
 
 function bindCard(p) {
   const card = document.querySelector("#node-detail .node-card");
   const on = (sel, fn) => card.querySelectorAll(sel).forEach((b) => b.addEventListener("click", (e) => fn(b, e)));
-  on("[data-close]", () => { document.getElementById("node-detail").innerHTML = ""; selectedNodeId = null; });
+  on("[data-close]", () => showDetail(false));
+  on("[data-all-comments]", (b) => { b.hidden = true; card.querySelector("#more-comments").hidden = false; });
   on("[data-act]", (b) => {
     const kind = b.dataset.act;
     const text = kind === "gone" ? (prompt("可以補充說明嗎？（選填）") ?? null) : "";
@@ -368,6 +377,7 @@ function bindCard(p) {
     });
   });
   on("[data-respond]", (b) => {
+    if (!requireLogin()) return;
     const text = prompt("你可以怎麼提供？（例如：我有 5 片棧板，週末可以送過去）");
     if (!text) return;
     busy(b, async () => {
@@ -387,6 +397,10 @@ function bindCard(p) {
     if (!confirm("確定要刪除這筆資料嗎？（會留下紀錄，可以還原）")) return;
     busy(b, async () => { await api("deleteItem", { table: b.dataset.del, id: b.dataset.id }); await refresh(p.node_id); });
   });
+  on("[data-del-comment]", (b) => {
+    if (!confirm("確定要刪除這則留言嗎？")) return;
+    busy(b, async () => { await api("deleteComment", { comment_id: b.dataset.delComment }); await refresh(p.node_id); });
+  });
   on("[data-edit-node]", () => openNodeForm(p));
   on("[data-add-offer]", () => openItemEditor("offer", p));
   on("[data-add-want]", () => openItemEditor("want", p));
@@ -397,24 +411,24 @@ function bindCard(p) {
 // ---------- 編輯表單 ----------
 
 function openItemEditor(kind, p, record = {}) {
-  const box = document.getElementById(kind === "offer" ? "offer-editor" : "want-editor");
-  document.getElementById("offer-editor").innerHTML = ""; document.getElementById("want-editor").innerHTML = "";
+  const box = document.getElementById("item-editor");
   const offerFields = `
     <label class="field-label">取得方式（可複選）</label>
     <div class="checks">${vocab.access_modes.map((a) => `<label><input type="checkbox" data-access value="${a.access_id}" ${String(record.access || "").split(";").includes(a.access_id) ? "checked" : ""}> ${esc(a.name_zh)}</label>`).join("")}</div>
     <label class="field-label">條件（選填）</label>
     <textarea data-f="conditions" maxlength="500" placeholder="例如：每週六 9–12 點，現場借用">${esc(record.conditions || "")}</textarea>
-    <label class="field-label">狀態</label>
-    <select data-f="status">${Object.entries(OFFER_STATUS).map(([k, v]) => `<option value="${k}" ${record.status === k ? "selected" : ""}>${v}</option>`).join("")}</select>`;
+    <label class="field-label" ${record.offer_id ? "" : "hidden"}>狀態</label>
+    <select data-f="status" ${record.offer_id ? "" : "hidden"}>${Object.entries(OFFER_STATUS).map(([k, v]) => `<option value="${k}" ${record.status === k ? "selected" : ""}>${v}</option>`).join("")}</select>`;
   const wantFields = `
     <label class="field-label">狀態</label>
     <select data-f="status">${Object.entries(WANT_STATUS).map(([k, v]) => `<option value="${k}" ${(record.status || "missing") === k ? "selected" : ""}>${v}</option>`).join("")}</select>
     <label class="field-label">說明（選填）</label>
     <textarea data-f="note" maxlength="500" placeholder="例如：需要約 2 公尺長的木料修補箱體">${esc(record.note || "")}</textarea>`;
-  box.innerHTML = `<div class="editor"><label class="field-label">資源項目</label>${itemSelect(record.item_id)}
+  box.innerHTML = `<div class="editor"><h3>${record.item_id ? "編輯" : "新增"}${kind === "offer" ? "提供" : "需要"}的資源</h3><label class="field-label">資源項目</label>${itemSelect(record.item_id)}
     ${kind === "offer" ? offerFields : wantFields}
     <div class="row-actions"><button class="primary-btn" data-save>儲存</button><button class="link" data-cancel>取消</button></div></div>`;
   const ed = box.querySelector(".editor");
+  ed.scrollIntoView({ block: "nearest" });
   const get = (f) => ed.querySelector(`[data-f="${f}"]`)?.value;
   ed.querySelector("[data-cancel]").addEventListener("click", () => (box.innerHTML = ""));
   ed.querySelector("[data-save]").addEventListener("click", (e) => {
@@ -433,8 +447,9 @@ function openItemEditor(kind, p, record = {}) {
 function startPlacing() {
   placing = { node: null };
   map.getCanvas().style.cursor = "crosshair";
-  document.getElementById("node-detail").innerHTML = `<div class="placeholder"><b>在地圖上點選據點的位置。</b><br><button class="link" data-cancel-place>取消</button></div>`;
-  document.querySelector("[data-cancel-place]").addEventListener("click", stopPlacing);
+  showDetail(true);
+  document.getElementById("node-detail").innerHTML = `<div class="placeholder"><b>在地圖上點一下據點的位置。</b><br><button class="link" data-cancel-place>取消</button></div>`;
+  document.querySelector("[data-cancel-place]").addEventListener("click", () => { stopPlacing(); showDetail(false); });
 }
 
 function stopPlacing() {
@@ -465,16 +480,18 @@ function openNodeForm(p, lngLat) {
     <label class="field-label">據點名稱</label><input type="text" data-f="name" maxlength="60" value="${esc(p.name || "")}">
     <label class="field-label">據點類型</label>
     <select data-f="node_type"><option value="">請選擇</option>${Object.entries(NODE_TYPES).map(([k, v]) => `<option value="${k}" ${p.node_type === k ? "selected" : ""}>${v}</option>`).join("")}</select>
-    <p class="note">個人據點不公開地址，位置只顯示到村里中心。</p>
-    <label class="field-label">據點屬性（可複選：別人可以在這裡做什麼？）</label>
+    <p class="note">選「個人」時不公開地址，位置只標到村里中心。</p>
+    <label class="field-label">別人可以在這裡做什麼？（可複選）</label>
     <div class="checks">${vocab.needs.map((n) => `<label><input type="checkbox" data-need value="${n.need_id}" ${p.needs.includes(n.need_id) ? "checked" : ""}> ${esc(n.name_zh)}</label>`).join("")}</div>
     <label class="field-label">位置</label>
     <p class="note" id="pos-text">${isNew ? `已選擇：${lngLat[1].toFixed(5)}, ${lngLat[0].toFixed(5)}（可以再點地圖調整）` : `<button class="link" data-move>在地圖上重新選擇位置</button>`}</p>
-    <label class="field-label">地址（選填）</label><input type="text" data-f="address" maxlength="120" value="${esc(p.address || "")}">
-    <label class="field-label">簡介（選填）</label><textarea data-f="description" maxlength="500">${esc(p.description || "")}</textarea>
-    <label class="field-label">聯絡方式（選填）</label>
-    <div class="checks"><label><input type="checkbox" data-f-check="contact_public" ${p.contact ? "checked" : ""}> 公開以下聯絡方式</label></div>
-    <input type="text" data-f="contact_text" maxlength="200" value="${esc(p.contact || "")}" placeholder="電話、網站、粉專">
+    <details class="optional" ${isNew ? "" : "open"}><summary>地址、簡介、聯絡方式（選填）</summary>
+      <label class="field-label">地址</label><input type="text" data-f="address" maxlength="120" value="${esc(p.address || "")}">
+      <label class="field-label">簡介</label><textarea data-f="description" maxlength="500">${esc(p.description || "")}</textarea>
+      <label class="field-label">聯絡方式</label>
+      <input type="text" data-f="contact_text" maxlength="200" value="${esc(p.contact || "")}" placeholder="電話、網站、粉專">
+      <div class="checks"><label><input type="checkbox" data-f-check="contact_public" ${p.contact ? "checked" : ""}> 公開聯絡方式</label></div>
+    </details>
     ${isNew ? `<div class="checks"><label><input type="checkbox" data-f-check="consent"> 我同意將這個據點的資料公開在網站上，並由使用者共同編輯</label></div>` : ""}
     <div class="row-actions"><button class="primary-btn" data-save>儲存</button><button class="link" data-cancel>取消</button></div></div>`;
   const ed = target.querySelector(".editor");
@@ -487,7 +504,7 @@ function openNodeForm(p, lngLat) {
   });
   ed.querySelector("[data-cancel]").addEventListener("click", () => {
     stopPlacing();
-    if (isNew) document.getElementById("node-detail").innerHTML = ""; else target.innerHTML = "";
+    if (isNew) showDetail(false); else target.innerHTML = "";
   });
   ed.querySelector("[data-save]").addEventListener("click", (e) => {
     const lngLatNew = placing?.lngLat;
@@ -513,26 +530,26 @@ function openNodeForm(p, lngLat) {
 // ---------- 面板 ----------
 
 function renderResourcePanel() {
-  const itemOptions = vocab.resource_classes.map((c) => `<optgroup label="${esc(c.name_zh)}">${
-    vocab.resource_items.filter((i) => i.class_id === c.class_id).map((i) => `<option value="${i.item_id}">${esc(i.name_zh)}</option>`).join("")}</optgroup>`).join("");
   document.getElementById("panel").innerHTML = `
     <h2>我附近有哪些夥伴？</h2>
-    <p class="sub">由使用者共同建立與維護的資源網絡：每個據點都能公布「提供」與「需要」，看到需求可以直接回應。</p>
+    <p class="sub">看看附近誰有你需要的東西，誰又需要你手上的資源。</p>
     <div id="auth-bar"></div>
-    <div class="segmented" role="group" aria-label="供給或需求">
-      ${[["all", "全部"], ["offer", "提供"], ["need", "需要"]].map(([k, l]) => `<button data-direction="${k}" class="${rf.direction === k ? "on" : ""}">${l}</button>`).join("")}
+    <div id="list-view">
+      <input id="resource-query" type="search" placeholder="找什麼？例如：電鑽、棧板、木工" value="${esc(rf.query)}" aria-label="搜尋據點或資源">
+      <div class="filter-row">
+        <div class="segmented" role="group" aria-label="供給或需求">
+          ${[["all", "全部"], ["offer", "有提供"], ["need", "有需要"]].map(([k, l]) => `<button data-direction="${k}" class="${rf.direction === k ? "on" : ""}">${l}</button>`).join("")}
+        </div>
+        <details class="more-filters" ${rf.needs.size ? "open" : ""}><summary>依用途篩選${rf.needs.size ? `（${rf.needs.size}）` : ""}</summary>
+          <div class="need-filters">${vocab.needs.map((n) => `
+            <button class="need-toggle ${rf.needs.has(n.need_id) ? "on" : ""}" data-need="${n.need_id}" style="--c:${NEED_COLORS[n.need_id]}" title="${esc(n.question)}">${esc(n.name_zh)}</button>`).join("")}
+          </div>
+        </details>
+      </div>
+      <div id="resource-results"></div>
     </div>
-    <div class="need-filters">${vocab.needs.map((n) => `
-      <button class="need-toggle ${rf.needs.has(n.need_id) ? "on" : ""}" data-need="${n.need_id}" style="--c:${NEED_COLORS[n.need_id]}" title="${esc(n.question)}">${esc(n.name_zh)}</button>`).join("")}
-    </div>
-    <label class="field-label" for="resource-item">資源項目</label>
-    <select id="resource-item"><option value="">全部</option>${itemOptions}</select>
-    <label class="field-label" for="resource-query" style="margin-top:8px">搜尋名稱或資源</label>
-    <input id="resource-query" type="search" placeholder="例如：電鑽、木材" value="${esc(rf.query)}">
-    <div id="node-detail"></div>
-    <div id="resource-results"></div>`;
+    <div id="node-detail"></div>`;
   renderAuthBar();
-  document.getElementById("resource-item").value = rf.item;
   document.querySelectorAll("[data-direction]").forEach((btn) => btn.addEventListener("click", () => {
     rf.direction = btn.dataset.direction;
     document.querySelectorAll("[data-direction]").forEach((b) => b.classList.toggle("on", b === btn));
@@ -542,9 +559,9 @@ function renderResourcePanel() {
     const n = btn.dataset.need;
     rf.needs.has(n) ? rf.needs.delete(n) : rf.needs.add(n);
     btn.classList.toggle("on");
+    document.querySelector(".more-filters summary").textContent = `依用途篩選${rf.needs.size ? `（${rf.needs.size}）` : ""}`;
     applyResourceFilter();
   }));
-  document.getElementById("resource-item").addEventListener("change", (e) => { rf.item = e.target.value; applyResourceFilter(); });
   let timer;
   document.getElementById("resource-query").addEventListener("input", (e) => {
     clearTimeout(timer);
@@ -558,7 +575,7 @@ async function enterResourceMode() {
   ensureNodeLayers();
   ["nodes-circle", "nodes-label"].forEach((id) => map.setLayoutProperty(id, "visibility", "visible"));
   map.setPaintProperty("villages-fill", "fill-opacity", 0.18); // 村里著色淡化
-  document.getElementById("controls").classList.add("muted");
+  document.getElementById("controls").hidden = true;
   renderResourcePanel();
   applyResourceFilter();
 }
@@ -569,7 +586,7 @@ function exitResourceMode() {
   ["nodes-circle", "nodes-label"].forEach((id) => map.setLayoutProperty(id, "visibility", "none"));
   const zoningOn = document.getElementById("toggle-zoning").checked;
   map.setPaintProperty("villages-fill", "fill-opacity", zoningOn ? 0 : 0.78);
-  document.getElementById("controls").classList.remove("muted");
+  document.getElementById("controls").hidden = false;
 }
 
 // ---------- 本機測試用的模擬後端（?mock=1，資料只存在這個瀏覽器） ----------
@@ -618,6 +635,7 @@ const mockApi = (() => {
         save(d); return { [key]: rec[key] };
       }
       if (action === "deleteItem") { d[p.table] = d[p.table].filter((x) => (x.offer_id || x.want_id) !== p.id); save(d); return true; }
+      if (action === "deleteComment") { d.comments = d.comments.filter((c) => c.comment_id !== p.comment_id); save(d); return true; }
       if (action === "comment") {
         d.comments.push({ comment_id: "c-" + uid(), node_id: p.node_id, target_type: p.target_type, target_id: p.target_type === "node" ? p.node_id : p.target_id, kind: p.kind, text: p.text, author_name: d.name, created_at: t });
         if (p.kind === "still") {
