@@ -108,6 +108,37 @@ input[type="search"] { width: 100%; font: inherit; font-size: 14px; padding: 6px
 .segmented button + button { border-left: 1px solid var(--border); }
 .segmented button.on { background: var(--accent-bg); color: var(--accent); }
 
+/* 協作編輯 */
+.primary-btn { font: inherit; font-size: 13px; padding: 6px 12px; border-radius: var(--radius); border: 1px solid var(--accent); background: var(--accent); color: #fff; cursor: pointer; }
+.primary-btn:disabled, .link:disabled { opacity: .5; cursor: wait; }
+.link { font: inherit; font-size: 13px; border: none; background: none; color: var(--accent); padding: 2px 4px; cursor: pointer; }
+.link.danger { color: #a32d2d; }
+.link.strong { font-weight: 600; }
+.auth-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; margin: 4px 0 10px; }
+.row-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 8px 0; }
+.editor { background: var(--bg); border-radius: var(--radius); padding: 10px 12px; margin: 8px 0; }
+.editor h3 { margin-top: 0; }
+.editor input[type="text"], .editor textarea, .editor select, .comment-form textarea {
+  width: 100%; font: inherit; font-size: 14px; padding: 6px 8px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface);
+}
+.editor textarea, .comment-form textarea { min-height: 56px; resize: vertical; }
+.checks { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 13px; margin: 4px 0; }
+.checks label { display: flex; gap: 4px; align-items: center; }
+.msg { padding: 6px 10px; border-radius: var(--radius); font-size: 13px; margin: 8px 0; }
+.msg.error { background: #FCEBEB; color: #A32D2D; }
+.entry { display: flex; justify-content: space-between; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
+.entry.want b::before { content: ""; }
+.entry-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; align-content: flex-start; gap: 0 2px; max-width: 150px; flex: none; }
+.fresh { display: inline-block; font-size: 11px; color: var(--text-3); margin-top: 2px; }
+.fresh.stale { color: #854F0B; }
+.is-stale { opacity: .6; }
+.comment { font-size: 13px; padding: 6px 0; border-bottom: 1px dashed var(--border); }
+.comment-meta { font-size: 11px; color: var(--text-3); display: block; }
+.comment.kind-response { background: #EAF3DE; padding: 6px 8px; border-radius: 6px; border-bottom: none; margin: 4px 0; }
+.comment.kind-gone .comment-meta { color: #854F0B; }
+.comment-form { display: grid; gap: 6px; margin-bottom: 8px; }
+.comment-form .primary-btn { justify-self: end; }
+
 .maplibregl-popup-content { font-family: var(--font); font-size: 13px; padding: 6px 10px; }
 
 @media (max-width: 760px) {

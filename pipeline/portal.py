@@ -1,4 +1,7 @@
-"""據點填報系統的匯入：讀取 Apps Script 的公開匯出（JSON），轉成 nodes / resources / intents。
+"""據點填報系統的匯入：讀取 Apps Script 的公開匯出（JSON），轉成 nodes / resources / intents / comments。
+
+2026-10-28 起網站直接即時讀取 Apps Script 的匯出；這個程式改為**定期備份**：
+把公開資料存進 data/processed/field/，提交到 git 保留歷史，並作為網站讀不到即時資料時的備用資料。
 
 python pipeline/portal.py
 
@@ -107,6 +110,9 @@ def main() -> int:
     nodes.to_csv(OUT / "nodes_portal.csv", index=False)
     resources.to_csv(OUT / "resources_portal.csv", index=False)
     intents.to_csv(OUT / "intents_portal.csv", index=False)
+    # 評論與確認紀錄（2026-10-28 起網站即時讀取，這裡只做備份，讓歷史留在 git 中）
+    comments = pd.DataFrame(data.get("comments", []))
+    comments.to_csv(OUT / "comments_portal.csv", index=False)
     print(f"  填報系統：據點 {len(nodes)} 個（個人 {(nodes['node_type'] == 'individual').sum()}）、"
           f"提供 {len(resources)} 項、需要 {len(intents)} 項")
     return 0

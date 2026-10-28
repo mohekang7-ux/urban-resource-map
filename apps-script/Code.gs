@@ -1,22 +1,36 @@
 /**
- * 據點填報系統（Google Apps Script，綁定在 Google 試算表上）
+ * 資源網絡的公開協作後端（Google Apps Script，綁定在 Google 試算表上）— 第 2 版
  *
- * 據點透過網頁自行管理「我們提供的」與「我們需要的」資源，資料存在這份試算表。
- * 2026-10-28 決定：第一階段不做身分驗證，但必須提供 Gmail；填報後直接公開；
- * 聯絡方式由據點自行決定是否公開；Gmail 一律不公開。每次修改都寫入「log」工作表。
+ * 2026-10-28 決定（docs/decisions.md）：
+ * - 在網站地圖上直接新增、編輯、評論、回報「還在／已經沒有了」、回應需求；
+ * - 以 Google 帳號登入才能寫入（網站用 Google Identity Services 取得 ID token，這裡驗證）；
+ * - 任何人都能修改任何據點，每次修改寫入 log、可還原，建立者會收到 Email 通知；
+ * - 3 個月沒有人確認的資料，網站標示「可能已過時」（由網站依 last_confirmed_at 判斷）。
  *
  * 部署方式見 apps-script/README.md。詞表在 Vocab.gs，由 pipeline/apps_script_vocab.py 產生。
  *
+ * 指令碼屬性（專案設定 → 指令碼屬性）：
+ *   GOOGLE_CLIENT_ID  Google Cloud 的 OAuth 用戶端 ID（網站登入用）
+ *   SITE_URL          網站網址，例如 https://mohekang7-ux.github.io/urban-resource-map/
+ *
  * 網址：
- *   …/exec                 填報網頁
- *   …/exec?action=export   匯出可公開的資料（JSON），供 pipeline/portal.py 讀取
+ *   GET  …/exec?action=export   匯出可公開的資料（JSON），網站與 pipeline/portal.py 讀取
+ *   POST …/exec                 寫入動作，body 為 JSON：{ action, token, ... }
+ *   GET  …/exec                 導向網站
  */
 
+// 新增欄位一律加在陣列最後，setup() 會補上舊試算表缺少的欄位
 const SHEETS = {
   nodes: ['node_id', 'name', 'node_type', 'needs', 'address', 'lon', 'lat', 'description',
-          'contact_public', 'contact_text', 'email', 'consent', 'status', 'created_at', 'updated_at'],
-  offers: ['offer_id', 'node_id', 'item_id', 'access', 'conditions', 'status', 'created_at', 'updated_at'],
-  wants: ['want_id', 'node_id', 'item_id', 'status', 'note', 'created_at', 'updated_at'],
+          'contact_public', 'contact_text', 'email', 'consent', 'status', 'created_at', 'updated_at',
+          'updated_by', 'last_confirmed_at'],
+  offers: ['offer_id', 'node_id', 'item_id', 'access', 'conditions', 'status', 'created_at', 'updated_at',
+           'created_by', 'updated_by', 'last_confirmed_at'],
+  wants: ['want_id', 'node_id', 'item_id', 'status', 'note', 'created_at', 'updated_at',
+          'created_by', 'updated_by', 'last_confirmed_at'],
+  comments: ['comment_id', 'node_id', 'target_type', 'target_id', 'kind', 'text', 'author_email', 'author_name',
+             'created_at', 'status'],
+  users: ['email', 'display_name', 'created_at', 'updated_at'],
   log: ['timestamp', 'email', 'action', 'table', 'record_id', 'before', 'after'],
 };
 
@@ -26,172 +40,304 @@ const NODE_TYPES = {
 };
 const OFFER_STATUS = ['active', 'paused'];
 const WANT_STATUS = ['missing', 'partial', 'unknown', 'fulfilled'];
+const COMMENT_KINDS = ['comment', 'response', 'still', 'gone'];  // response：回應需求「我可以提供」
 const TAIPEI_BBOX = { lonMin: 121.4, lonMax: 121.7, latMin: 24.9, latMax: 25.3 };
 const MAX_TEXT = 500;
+const WRITES_PER_HOUR = 60;  // 每個帳號每小時的寫入上限，防止灌水
 
-// ---------- 初次設定 ----------
+// ---------- 初次設定與升級 ----------
 
-/** 在 Apps Script 編輯器手動執行一次：建立工作表與標題列。 */
+/** 在 Apps Script 編輯器手動執行：建立工作表，並替舊工作表補上新欄位（不動既有資料）。 */
 function setup() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   Object.entries(SHEETS).forEach(([name, header]) => {
     const sheet = ss.getSheetByName(name) || ss.insertSheet(name);
-    sheet.getRange(1, 1, 1, header.length).setValues([header]).setFontWeight('bold');
+    const lastCol = Math.max(sheet.getLastColumn(), 1);
+    const existing = sheet.getRange(1, 1, 1, lastCol).getValues()[0].filter(String);
+    const missing = header.filter((h) => !existing.includes(h));
+    if (missing.length) sheet.getRange(1, existing.length + 1, 1, missing.length).setValues([missing]);
+    sheet.getRange(1, 1, 1, existing.length + missing.length).setFontWeight('bold');
     sheet.setFrozenRows(1);
   });
-  const first = ss.getSheets()[0];
-  if (first.getName() === '工作表1' || first.getName() === 'Sheet1') ss.deleteSheet(first);
+  ['工作表1', 'Sheet1'].forEach((n) => { const s = ss.getSheetByName(n); if (s && ss.getSheets().length > 1) ss.deleteSheet(s); });
 }
 
-// ---------- 網頁進入點 ----------
+// ---------- 進入點 ----------
 
 function doGet(e) {
-  if (e && e.parameter && e.parameter.action === 'export') {
-    return ContentService.createTextOutput(JSON.stringify(exportPublic()))
-      .setMimeType(ContentService.MimeType.JSON);
-  }
-  return HtmlService.createHtmlOutputFromFile('Index')
-    .setTitle('據點資源庫：填報你的供給與需求')
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+  if (e && e.parameter && e.parameter.action === 'export') return json(exportPublic());
+  const site = PropertiesService.getScriptProperties().getProperty('SITE_URL') || '';
+  return HtmlService.createHtmlOutput(
+    `<p>據點資料請在網站地圖上新增與編輯：<a href="${site}" target="_top">${site}</a></p>`);
 }
 
-// ---------- 給網頁呼叫的函式（google.script.run） ----------
+function doPost(e) {
+  try {
+    const body = JSON.parse(e.postData.contents);
+    const user = verifyToken(body.token);
+    const handler = ACTIONS[body.action];
+    if (!handler) throw new Error('不支援的動作。');
+    if (body.action !== 'me') rateLimit(user.email);
+    return json({ ok: true, data: handler(user, body) });
+  } catch (err) {
+    return json({ ok: false, error: String(err.message || err) });
+  }
+}
+
+function json(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
+}
+
+// ---------- 身分驗證（Google ID token） ----------
+
+function verifyToken(token) {
+  if (!token) throw new Error('請先用 Google 帳號登入。');
+  const cache = CacheService.getScriptCache();
+  const key = 'tok_' + Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, token));
+  const hit = cache.get(key);
+  if (hit) return JSON.parse(hit);
+
+  const resp = UrlFetchApp.fetch('https://oauth2.googleapis.com/tokeninfo?id_token=' + encodeURIComponent(token), { muteHttpExceptions: true });
+  if (resp.getResponseCode() !== 200) throw new Error('登入已過期，請重新登入。');
+  const info = JSON.parse(resp.getContentText());
+  const clientId = PropertiesService.getScriptProperties().getProperty('GOOGLE_CLIENT_ID');
+  if (!clientId || info.aud !== clientId) throw new Error('登入憑證不屬於這個網站。');
+  if (!['accounts.google.com', 'https://accounts.google.com'].includes(info.iss)) throw new Error('登入憑證無效。');
+  if (String(info.email_verified) !== 'true') throw new Error('這個 Google 帳號的 Email 尚未驗證。');
+  const user = { email: String(info.email).toLowerCase(), google_name: info.given_name || info.name || '' };
+  const ttl = Math.max(60, Math.min(3000, Number(info.exp) - Math.floor(Date.now() / 1000)));
+  cache.put(key, JSON.stringify(user), ttl);
+  return user;
+}
+
+function rateLimit(email) {
+  const cache = CacheService.getScriptCache();
+  const key = 'rl_' + email;
+  const count = Number(cache.get(key) || 0) + 1;
+  if (count > WRITES_PER_HOUR) throw new Error('這一小時的編輯次數已達上限，請稍後再試。');
+  cache.put(key, String(count), 3600);
+}
+
+function displayName(email) {
+  const u = readRows('users').find((r) => r.email === email);
+  if (!u || !u.display_name) throw new Error('請先設定你的公開暱稱。');
+  return u.display_name;
+}
+
+// ---------- 寫入動作 ----------
+
+const ACTIONS = {
+  /** 登入後取得自己的暱稱（沒有設定時回傳 Google 名字作為建議）。 */
+  me(user) {
+    const u = readRows('users').find((r) => r.email === user.email);
+    return { display_name: u ? u.display_name : '', suggested_name: user.google_name };
+  },
+
+  setName(user, body) {
+    const name = requireText(body.display_name, '公開暱稱', 30);
+    return withLock(() => {
+      const now = new Date().toISOString();
+      const existing = readRows('users').find((r) => r.email === user.email);
+      if (existing) updateRow('users', 'email', user.email, { display_name: name, updated_at: now });
+      else appendRow('users', { email: user.email, display_name: name, created_at: now, updated_at: now });
+      return { display_name: name };
+    });
+  },
+
+  /** 新增或修改據點。任何登入者都能修改；只有在 position_changed 時才更新位置（避免個人據點的精確位置被模糊座標覆蓋）。 */
+  saveNode(user, body) {
+    const p = body.node || {};
+    const name = displayName(user.email);
+    return withLock(() => {
+      const now = new Date().toISOString();
+      const vocab = getVocab();
+      const record = {
+        name: requireText(p.name, '據點名稱', 60),
+        node_type: requireEnum(p.node_type, Object.keys(NODE_TYPES), '據點類型'),
+        needs: requireList(p.needs, vocab.needs.map((n) => n.need_id), '據點屬性').join(';'),
+        address: cleanText(p.address, 120),
+        description: cleanText(p.description, MAX_TEXT),
+        contact_public: p.contact_public === true,
+        contact_text: cleanText(p.contact_text, 200),
+        updated_at: now, updated_by: name, last_confirmed_at: now,
+      };
+      if (record.contact_public && !record.contact_text) throw new Error('選擇公開聯絡方式時，請填寫要公開的聯絡方式。');
+      if (!p.node_id || p.position_changed) {
+        record.lon = requireNumber(p.lon, TAIPEI_BBOX.lonMin, TAIPEI_BBOX.lonMax, '位置（經度）');
+        record.lat = requireNumber(p.lat, TAIPEI_BBOX.latMin, TAIPEI_BBOX.latMax, '位置（緯度）');
+      }
+
+      if (p.node_id) {
+        const before = activeNode(p.node_id);
+        updateRow('nodes', 'node_id', p.node_id, record);
+        writeLog(user.email, 'update', 'nodes', p.node_id, before, record);
+        notifyCreator(before, user, `${name} 修改了據點「${record.name}」的資料。`);
+        return { node_id: p.node_id };
+      }
+      if (p.consent !== true) throw new Error('請先勾選同意公開說明。');
+      const nodeId = 'portal-' + Utilities.getUuid().slice(0, 8);
+      appendRow('nodes', { ...record, node_id: nodeId, email: user.email, consent: true, status: 'active', created_at: now });
+      writeLog(user.email, 'create', 'nodes', nodeId, null, record);
+      return { node_id: nodeId };
+    });
+  },
+
+  saveOffer(user, body) {
+    const o = body.offer || {};
+    const name = displayName(user.email);
+    return withLock(() => {
+      const node = activeNode(body.node_id);
+      const vocab = getVocab();
+      const now = new Date().toISOString();
+      const record = {
+        node_id: body.node_id,
+        item_id: requireEnum(o.item_id, vocab.resource_items.map((i) => i.item_id), '資源項目'),
+        access: requireList(o.access, vocab.access_modes.map((a) => a.access_id), '取得方式').join(';'),
+        conditions: cleanText(o.conditions, MAX_TEXT),
+        status: requireEnum(o.status || 'active', OFFER_STATUS, '狀態'),
+        updated_at: now, updated_by: name, last_confirmed_at: now,
+      };
+      const id = upsertChild('offers', 'offer_id', o.offer_id, record, user, name);
+      notifyCreator(node, user, `${name} ${o.offer_id ? '修改' : '新增'}了「${node.name}」提供的資源：${itemName(record.item_id)}。`);
+      return { offer_id: id };
+    });
+  },
+
+  saveWant(user, body) {
+    const w = body.want || {};
+    const name = displayName(user.email);
+    return withLock(() => {
+      const node = activeNode(body.node_id);
+      const vocab = getVocab();
+      const now = new Date().toISOString();
+      const record = {
+        node_id: body.node_id,
+        item_id: requireEnum(w.item_id, vocab.resource_items.map((i) => i.item_id), '資源項目'),
+        status: requireEnum(w.status || 'missing', WANT_STATUS, '狀態'),
+        note: cleanText(w.note, MAX_TEXT),
+        updated_at: now, updated_by: name, last_confirmed_at: now,
+      };
+      const id = upsertChild('wants', 'want_id', w.want_id, record, user, name);
+      notifyCreator(node, user, `${name} ${w.want_id ? '修改' : '新增'}了「${node.name}」需要的資源：${itemName(record.item_id)}。`);
+      return { want_id: id };
+    });
+  },
+
+  /** 刪除供給或需求（軟刪除，保留紀錄）。 */
+  deleteItem(user, body) {
+    const name = displayName(user.email);
+    return withLock(() => {
+      const key = { offers: 'offer_id', wants: 'want_id' }[body.table];
+      if (!key) throw new Error('不支援的資料表。');
+      const before = readRows(body.table).find((r) => r[key] === body.id);
+      if (!before) throw new Error('找不到這筆資料。');
+      const node = activeNode(before.node_id);
+      updateRow(body.table, key, body.id, { status: 'deleted', updated_at: new Date().toISOString(), updated_by: name });
+      writeLog(user.email, 'delete', body.table, body.id, before, null);
+      notifyCreator(node, user, `${name} 刪除了「${node.name}」的一筆資料：${itemName(before.item_id)}。`);
+      return true;
+    });
+  },
+
+  /** 評論、回應需求、回報「還在」或「已經沒有了」。 */
+  comment(user, body) {
+    const name = displayName(user.email);
+    return withLock(() => {
+      const kind = requireEnum(body.kind || 'comment', COMMENT_KINDS, '評論類型');
+      const targetType = requireEnum(body.target_type || 'node', ['node', 'offer', 'want'], '評論對象');
+      const node = activeNode(body.node_id);
+      const target = targetType === 'node' ? node : findChild(targetType, body.target_id, body.node_id);
+      const text = cleanText(body.text, MAX_TEXT);
+      if (['comment', 'response'].includes(kind) && !text) throw new Error('請輸入內容。');
+      const now = new Date().toISOString();
+      const commentId = 'c-' + Utilities.getUuid().slice(0, 10);
+      appendRow('comments', {
+        comment_id: commentId, node_id: body.node_id, target_type: targetType,
+        target_id: targetType === 'node' ? body.node_id : body.target_id, kind, text,
+        author_email: user.email, author_name: name, created_at: now, status: 'visible',
+      });
+      if (kind === 'still') {
+        // 有人確認還在：更新最後確認時間
+        const table = { node: 'nodes', offer: 'offers', want: 'wants' }[targetType];
+        const key = { node: 'node_id', offer: 'offer_id', want: 'want_id' }[targetType];
+        updateRow(table, key, targetType === 'node' ? body.node_id : body.target_id, { last_confirmed_at: now });
+      }
+      const what = targetType === 'node' ? `據點「${node.name}」` : `「${node.name}」的${itemName(target.item_id)}`;
+      const message = {
+        comment: `${name} 在${what}留言：${text}`,
+        response: `${name} 回應了${what}的需求：${text}`,
+        still: `${name} 確認${what}還在。`,
+        gone: `${name} 回報${what}已經沒有了${text ? '：' + text : '。'}請確認是否需要更新。`,
+      }[kind];
+      if (kind !== 'still') notifyCreator(node, user, message);
+      writeLog(user.email, 'comment:' + kind, targetType, commentId, null, { text });
+      return { comment_id: commentId };
+    });
+  },
+};
+
+// ---------- 匯出（公開） ----------
+
+/** 只匯出可公開的欄位：不含任何 Email；聯絡方式只在據點選擇公開時輸出；個人據點不含地址、位置降低精度。 */
+function exportPublic() {
+  const nodes = readRows('nodes').filter((n) => n.status === 'active' && n.consent === true);
+  const ids = new Set(nodes.map((n) => n.node_id));
+  const iso = (v) => (v instanceof Date ? v.toISOString() : String(v || ''));
+  return {
+    generated_at: new Date().toISOString(),
+    vocab_node_types: NODE_TYPES,
+    nodes: nodes.map((n) => {
+      const individual = n.node_type === 'individual';
+      const round = (v) => (individual ? Math.round(Number(v) * 100) / 100 : Number(v));
+      return {
+        node_id: n.node_id, name: n.name, node_type: n.node_type, needs: String(n.needs).split(';').filter(String),
+        address: individual ? '' : n.address, lon: round(n.lon), lat: round(n.lat), description: n.description,
+        contact: n.contact_public === true ? n.contact_text : '', created_at: iso(n.created_at), updated_at: iso(n.updated_at),
+        updated_by: n.updated_by || '', last_confirmed_at: iso(n.last_confirmed_at || n.updated_at),
+      };
+    }),
+    offers: readRows('offers').filter((o) => ids.has(o.node_id) && o.status === 'active').map((o) => ({
+      offer_id: o.offer_id, node_id: o.node_id, item_id: o.item_id, access: o.access, conditions: o.conditions,
+      updated_at: iso(o.updated_at), updated_by: o.updated_by || '', last_confirmed_at: iso(o.last_confirmed_at || o.updated_at),
+    })),
+    wants: readRows('wants').filter((w) => ids.has(w.node_id) && !['deleted', 'fulfilled'].includes(w.status)).map((w) => ({
+      want_id: w.want_id, node_id: w.node_id, item_id: w.item_id, status: w.status, note: w.note,
+      updated_at: iso(w.updated_at), updated_by: w.updated_by || '', last_confirmed_at: iso(w.last_confirmed_at || w.updated_at),
+    })),
+    comments: readRows('comments').filter((c) => ids.has(c.node_id) && c.status === 'visible').map((c) => ({
+      comment_id: c.comment_id, node_id: c.node_id, target_type: c.target_type, target_id: c.target_id,
+      kind: c.kind, text: c.text, author_name: c.author_name, created_at: iso(c.created_at),
+    })),
+  };
+}
+
+// ---------- 通知 ----------
+
+/** 有人修改或留言時，通知據點建立者（自己改自己的不通知）。每日寄信量有上限，失敗時不影響寫入。 */
+function notifyCreator(node, user, message) {
+  if (!node.email || node.email === user.email) return;
+  const site = PropertiesService.getScriptProperties().getProperty('SITE_URL') || '';
+  try {
+    MailApp.sendEmail({
+      to: node.email,
+      subject: `【台北製造能力地圖】你的據點「${node.name}」有新動態`,
+      body: `${message}\n\n到地圖上查看：${site}\n\n你收到這封信，是因為你在台北製造能力地圖建立了這個據點。`,
+    });
+  } catch (err) {
+    console.warn('通知寄送失敗：' + err);
+  }
+}
+
+// ---------- 試算表讀寫 ----------
 
 function getVocab() {
   return { ...VOCAB, node_types: NODE_TYPES };
 }
 
-/** 依 Gmail 列出該信箱建立的據點（不含已刪除的）。 */
-function findNodes(email) {
-  email = checkEmail(email);
-  return readRows('nodes')
-    .filter((n) => n.email === email && n.status !== 'deleted')
-    .map((n) => ({ node_id: n.node_id, name: n.name, updated_at: n.updated_at }));
+function itemName(id) {
+  const item = VOCAB.resource_items.find((i) => i.item_id === id);
+  return item ? item.name_zh : id;
 }
-
-/** 讀取一個據點及其供給與需求；Gmail 必須和建立者相同。 */
-function getNode(nodeId, email) {
-  const node = ownedNode(nodeId, checkEmail(email));
-  return {
-    node: publicNodeFields(node, true),
-    offers: readRows('offers').filter((o) => o.node_id === nodeId && o.status !== 'deleted'),
-    wants: readRows('wants').filter((w) => w.node_id === nodeId && w.status !== 'deleted'),
-  };
-}
-
-/** 新增或更新據點。payload.node_id 為空時新增。回傳 node_id。 */
-function saveNode(payload) {
-  return withLock(() => {
-    const email = checkEmail(payload.email);
-    const now = new Date().toISOString();
-    const vocab = getVocab();
-    const record = {
-      name: requireText(payload.name, '據點名稱', 60),
-      node_type: requireEnum(payload.node_type, Object.keys(NODE_TYPES), '據點類型'),
-      needs: requireList(payload.needs, vocab.needs.map((n) => n.need_id), '據點屬性').join(';'),
-      address: cleanText(payload.address, 120),
-      lon: requireNumber(payload.lon, TAIPEI_BBOX.lonMin, TAIPEI_BBOX.lonMax, '位置（經度）'),
-      lat: requireNumber(payload.lat, TAIPEI_BBOX.latMin, TAIPEI_BBOX.latMax, '位置（緯度）'),
-      description: cleanText(payload.description, MAX_TEXT),
-      contact_public: payload.contact_public === true,
-      contact_text: cleanText(payload.contact_text, 200),
-      consent: payload.consent === true,
-      updated_at: now,
-    };
-    if (!record.consent) throw new Error('請先勾選同意公開說明。');
-    if (record.contact_public && !record.contact_text) throw new Error('選擇公開聯絡方式時，請填寫要公開的聯絡方式。');
-
-    if (payload.node_id) {
-      const before = ownedNode(payload.node_id, email);
-      updateRow('nodes', 'node_id', payload.node_id, record);
-      writeLog(email, 'update', 'nodes', payload.node_id, before, record);
-      return payload.node_id;
-    }
-    const nodeId = 'portal-' + Utilities.getUuid().slice(0, 8);
-    appendRow('nodes', { ...record, node_id: nodeId, email, status: 'active', created_at: now });
-    writeLog(email, 'create', 'nodes', nodeId, null, record);
-    return nodeId;
-  });
-}
-
-function saveOffer(nodeId, email, offer) {
-  return withLock(() => {
-    email = checkEmail(email);
-    ownedNode(nodeId, email);
-    const vocab = getVocab();
-    const record = {
-      node_id: nodeId,
-      item_id: requireEnum(offer.item_id, vocab.resource_items.map((i) => i.item_id), '資源項目'),
-      access: requireList(offer.access, vocab.access_modes.map((a) => a.access_id), '取得方式').join(';'),
-      conditions: cleanText(offer.conditions, MAX_TEXT),
-      status: requireEnum(offer.status || 'active', OFFER_STATUS, '狀態'),
-      updated_at: new Date().toISOString(),
-    };
-    return upsertChild('offers', 'offer_id', offer.offer_id, record, email, nodeId);
-  });
-}
-
-function saveWant(nodeId, email, want) {
-  return withLock(() => {
-    email = checkEmail(email);
-    ownedNode(nodeId, email);
-    const vocab = getVocab();
-    const record = {
-      node_id: nodeId,
-      item_id: requireEnum(want.item_id, vocab.resource_items.map((i) => i.item_id), '資源項目'),
-      status: requireEnum(want.status || 'missing', WANT_STATUS, '狀態'),
-      note: cleanText(want.note, MAX_TEXT),
-      updated_at: new Date().toISOString(),
-    };
-    return upsertChild('wants', 'want_id', want.want_id, record, email, nodeId);
-  });
-}
-
-/** 刪除供給或需求（軟刪除：狀態改為 deleted，保留紀錄）。 */
-function deleteItem(table, id, nodeId, email) {
-  return withLock(() => {
-    email = checkEmail(email);
-    ownedNode(nodeId, email);
-    const key = { offers: 'offer_id', wants: 'want_id' }[table];
-    if (!key) throw new Error('不支援的資料表。');
-    const before = readRows(table).find((r) => r[key] === id && r.node_id === nodeId);
-    if (!before) throw new Error('找不到這筆資料。');
-    updateRow(table, key, id, { status: 'deleted', updated_at: new Date().toISOString() });
-    writeLog(email, 'delete', table, id, before, null);
-    return true;
-  });
-}
-
-// ---------- 匯出（公開） ----------
-
-/** 只匯出可公開的欄位：不含 Gmail；聯絡方式只在據點選擇公開時輸出；個人據點的位置降低精度、不含地址。 */
-function exportPublic() {
-  const nodes = readRows('nodes').filter((n) => n.status === 'active' && n.consent === true);
-  const ids = new Set(nodes.map((n) => n.node_id));
-  return {
-    generated_at: new Date().toISOString(),
-    nodes: nodes.map((n) => publicNodeFields(n, false)),
-    offers: readRows('offers').filter((o) => ids.has(o.node_id) && o.status === 'active')
-      .map(({ offer_id, node_id, item_id, access, conditions, updated_at }) => ({ offer_id, node_id, item_id, access, conditions, updated_at })),
-    wants: readRows('wants').filter((w) => ids.has(w.node_id) && w.status !== 'deleted')
-      .map(({ want_id, node_id, item_id, status, note, updated_at }) => ({ want_id, node_id, item_id, status, note, updated_at })),
-  };
-}
-
-function publicNodeFields(n, forOwner) {
-  const individual = n.node_type === 'individual';
-  const round = (v) => (individual && !forOwner ? Math.round(Number(v) * 100) / 100 : Number(v)); // 約 1 公里
-  const out = {
-    node_id: n.node_id, name: n.name, node_type: n.node_type, needs: String(n.needs).split(';').filter(String),
-    address: individual && !forOwner ? '' : n.address, lon: round(n.lon), lat: round(n.lat),
-    description: n.description, contact: n.contact_public === true ? n.contact_text : '',
-    created_at: n.created_at, updated_at: n.updated_at,
-  };
-  if (forOwner) Object.assign(out, { contact_public: n.contact_public === true, contact_text: n.contact_text, consent: n.consent === true });
-  return out;
-}
-
-// ---------- 試算表讀寫 ----------
 
 function sheet(name) {
   const s = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(name);
@@ -205,8 +351,11 @@ function readRows(name) {
   return values.map((row) => Object.fromEntries(header.map((h, i) => [h, row[i]])));
 }
 
+/** 依工作表實際的標題列順序寫入（舊試算表補欄位後順序可能不同）。 */
 function appendRow(name, record) {
-  sheet(name).appendRow(SHEETS[name].map((h) => safeCell(record[h])));
+  const s = sheet(name);
+  const header = s.getRange(1, 1, 1, s.getLastColumn()).getValues()[0];
+  s.appendRow(header.map((h) => safeCell(record[h])));
 }
 
 function updateRow(name, keyField, keyValue, changes) {
@@ -224,17 +373,30 @@ function updateRow(name, keyField, keyValue, changes) {
   s.getRange(rowIndex + 1, 1, 1, row.length).setValues([row]);
 }
 
-function upsertChild(table, key, id, record, email, nodeId) {
+function activeNode(nodeId) {
+  const node = readRows('nodes').find((n) => n.node_id === nodeId && n.status === 'active');
+  if (!node) throw new Error('找不到這個據點。');
+  return node;
+}
+
+function findChild(targetType, id, nodeId) {
+  const [table, key] = targetType === 'offer' ? ['offers', 'offer_id'] : ['wants', 'want_id'];
+  const row = readRows(table).find((r) => r[key] === id && r.node_id === nodeId && r.status !== 'deleted');
+  if (!row) throw new Error('找不到這筆資料。');
+  return row;
+}
+
+function upsertChild(table, key, id, record, user, name) {
   if (id) {
-    const before = readRows(table).find((r) => r[key] === id && r.node_id === nodeId);
+    const before = readRows(table).find((r) => r[key] === id && r.node_id === record.node_id);
     if (!before) throw new Error('找不到這筆資料。');
     updateRow(table, key, id, record);
-    writeLog(email, 'update', table, id, before, record);
+    writeLog(user.email, 'update', table, id, before, record);
     return id;
   }
-  const newId = `${nodeId}:${table === 'offers' ? 'offer' : 'need'}:${Utilities.getUuid().slice(0, 6)}`;
-  appendRow(table, { ...record, [key]: newId, created_at: record.updated_at });
-  writeLog(email, 'create', table, newId, null, record);
+  const newId = `${record.node_id}:${table === 'offers' ? 'offer' : 'need'}:${Utilities.getUuid().slice(0, 6)}`;
+  appendRow(table, { ...record, [key]: newId, created_at: record.updated_at, created_by: name });
+  writeLog(user.email, 'create', table, newId, null, record);
   return newId;
 }
 
@@ -256,19 +418,6 @@ function withLock(fn) {
 }
 
 // ---------- 檢查與清理 ----------
-
-function ownedNode(nodeId, email) {
-  const node = readRows('nodes').find((n) => n.node_id === nodeId && n.status !== 'deleted');
-  if (!node) throw new Error('找不到這個據點。');
-  if (node.email !== email) throw new Error('這個 Gmail 不是此據點的建立者。');
-  return node;
-}
-
-function checkEmail(email) {
-  email = String(email || '').trim().toLowerCase();
-  if (!/^[a-z0-9._%+-]+@(gmail|googlemail)\.com$/.test(email)) throw new Error('請填寫有效的 Gmail 信箱（@gmail.com）。');
-  return email;
-}
 
 function cleanText(v, max) {
   return String(v == null ? '' : v).replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, max);
