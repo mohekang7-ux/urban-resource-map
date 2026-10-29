@@ -110,6 +110,12 @@ function verifyToken(token) {
   return user;
 }
 
+/** 管理者：指令碼屬性 ADMIN_EMAILS 列出的帳號（以逗號分隔），可以刪除任何人的留言。 */
+function isAdmin(email) {
+  const list = PropertiesService.getScriptProperties().getProperty('ADMIN_EMAILS') || '';
+  return list.split(',').map((s) => s.trim().toLowerCase()).filter(String).includes(String(email).toLowerCase());
+}
+
 function rateLimit(email) {
   const cache = CacheService.getScriptCache();
   const key = 'rl_' + email;
@@ -130,7 +136,7 @@ const ACTIONS = {
   /** 登入後取得自己的暱稱（沒有設定時回傳 Google 名字作為建議）。 */
   me(user) {
     const u = readRows('users').find((r) => r.email === user.email);
-    return { display_name: u ? u.display_name : '', suggested_name: user.google_name };
+    return { display_name: u ? u.display_name : '', suggested_name: user.google_name, is_admin: isAdmin(user.email) };
   },
 
   setName(user, body) {
@@ -240,12 +246,12 @@ const ACTIONS = {
     });
   },
 
-  /** 刪除自己的留言（軟刪除，status 改為 deleted，不再匯出）。只有留言者本人可以刪除。 */
+  /** 刪除留言（軟刪除，status 改為 deleted，不再匯出）。留言者本人與管理者（ADMIN_EMAILS）可以刪除。 */
   deleteComment(user, body) {
     return withLock(() => {
       const before = readRows('comments').find((c) => c.comment_id === body.comment_id && c.status === 'visible');
       if (!before) throw new Error('找不到這則留言。');
-      if (before.author_email !== user.email) throw new Error('只能刪除自己的留言。');
+      if (before.author_email !== user.email && !isAdmin(user.email)) throw new Error('只能刪除自己的留言。');
       updateRow('comments', 'comment_id', body.comment_id, { status: 'deleted' });
       writeLog(user.email, 'deleteComment', 'comments', body.comment_id, before, null);
       return true;

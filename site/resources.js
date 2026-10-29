@@ -19,7 +19,7 @@ const KIND_LABEL = { comment: "留言", response: "回應需求", still: "確認
 
 let nodes = null, vocab = null, networkLoading = null, selectedNodeId = null, placing = null, placeMarker = null;
 const rf = { classes: new Set(), query: "", direction: "all" };
-const auth = { token: null, exp: 0, name: "" };
+const auth = { token: null, exp: 0, name: "", admin: false };
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const itemName = (id) => vocab.itemById[id]?.name_zh || id;
@@ -145,6 +145,7 @@ async function onCredential(resp) {
   try {
     const me = await api("me");
     auth.name = me.display_name;
+    auth.admin = me.is_admin === true;
     if (!auth.name) return askDisplayName(me.suggested_name);
     renderAuthBar();
     if (selectedNodeId) showNode(nodes.features.find((f) => f.properties.node_id === selectedNodeId));
@@ -174,7 +175,7 @@ function renderAuthBar() {
   const bar = document.getElementById("auth-bar");
   if (!bar) return;
   if (loggedIn()) {
-    bar.innerHTML = `<div class="auth-row"><button class="primary-btn" data-new-node>＋ 新增據點</button><span class="sub">${esc(auth.name)}</span></div>`;
+    bar.innerHTML = `<div class="auth-row"><button class="primary-btn" data-new-node>＋ 新增據點</button><span class="sub">${esc(auth.name)}${auth.admin ? "（管理者）" : ""}</span></div>`;
     bar.querySelector("[data-new-node]").addEventListener("click", startPlacing);
   } else {
     bar.innerHTML = `<div class="auth-row"><span class="sub">登入後可以新增、回應與留言</span><div id="gsi-button"></div></div>`;
@@ -314,7 +315,7 @@ function showNode(f) {
   const shown = p.comments.filter((c) => c.kind !== "still");
   const commentHtml = (c) => `<div class="comment kind-${esc(c.kind)}">
       <span class="comment-meta">${esc(c.author_name)}${c.kind !== "comment" ? `・${esc(KIND_LABEL[c.kind] || c.kind)}` : ""}・${esc(String(c.created_at).slice(0, 10))}
-        ${editable && c.author_name === auth.name && c.comment_id ? `<button class="link danger" data-del-comment="${esc(c.comment_id)}">刪除</button>` : ""}</span>
+        ${editable && (auth.admin || c.author_name === auth.name) && c.comment_id ? `<button class="link danger" data-del-comment="${esc(c.comment_id)}">刪除</button>` : ""}</span>
       ${c.text ? `<div>${esc(c.text)}</div>` : ""}</div>`;
 
   const d = daysAgo(p.last_confirmed_at);
@@ -623,7 +624,7 @@ const mockApi = (() => {
       await new Promise((r) => setTimeout(r, 120));
       const d = await db();
       const t = now();
-      if (action === "me") return { display_name: d.name, suggested_name: "測試使用者" };
+      if (action === "me") return { display_name: d.name, suggested_name: "測試使用者", is_admin: new URLSearchParams(location.search).has("admin") };
       if (!d.name && action !== "setName") throw new Error("請先設定你的公開暱稱。");
       if (action === "setName") { d.name = p.display_name; save(d); return { display_name: d.name }; }
       if (action === "saveNode") {
