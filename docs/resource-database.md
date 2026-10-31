@@ -257,7 +257,7 @@ KoboToolbox 是一套免費、開源的現地資料蒐集工具，最早為人�
 - `data/schema/category_crosswalk.csv` 刪除 `implied_resources` 欄位；對照表只把來源分類對應到需求分類與中文名稱。
 - `data/schema/fields.csv` 刪除 `resources.inferred`，`nodes` 新增 `category_label`（登記或標註上的類別名稱）。
 - `pipeline/nodes.py` 不再產生資源，只輸出據點；`resources` 之後只來自現地與使用者（預定放在 `data/processed/field/resources_field.csv`）。
-- `pipeline/build_site.py` 輸出 `nodes_reference.geojson`（高可信公開資料，無資源）與 `nodes_verified.geojson`（確認資料）。
+- `pipeline/build_site.py` 輸出 `nodes_verified.geojson`（確認資料）。原本的 `nodes_reference.geojson`（高可信公開資料，無資源）2026-10-31 起不再輸出，店家與工廠圖層已從網站移除。
 - 中、低可信度的商業登記、登記工廠、OSM 仍保留在 `data/processed/` 供研究與走讀候選清單使用，但不上網站。
 
 ## 十三、高可信度的定義與找資源的據點單位（2026-10-28）

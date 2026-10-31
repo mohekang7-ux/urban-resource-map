@@ -74,41 +74,22 @@ def _clean(v):
     return None if pd.isna(v) else v
 
 
-def _display_category(label: str) -> str:
-    """地圖與清單用的簡短類別；完整的登記項目另外保留在 category。"""
-    if "特定工廠" in label:
-        return "工廠：" + label.split("（")[0]
-    has_hw, has_bm = "五金" in label, "建材" in label
-    return "五金建材行" if has_hw and has_bm else "五金行" if has_hw else "建材行" if has_bm else label
-
-
 def _write_features(dest, features) -> None:
     dest.write_text(json.dumps({"type": "FeatureCollection", "features": features}, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     print(f"  輸出：{dest.relative_to(ROOT)}（{len(features)} 個據點，{dest.stat().st_size / 1e6:.2f} MB）")
 
 
 def export_nodes() -> None:
-    """網站用的據點，分兩種（2026-10-27 決定）：
+    """網站用的據點：
 
-    - nodes_reference.geojson：「公開資料（參考）」模式用。只放商業登記與工廠中**高可信**的據點，
-      只有名稱、地址、登記類別等事實，不附任何推論的資源。
     - nodes_verified.geojson：「我附近有哪些夥伴？」模式用。只放現地確認或據點自行填報（verification ≥ 2）且公開的據點，
       附上供給 resources 與需求 wants；來源是 data/processed/field/ 下的 *_field.csv（據點範本）
       與 *_portal.csv（據點填報系統）。
-    """
-    for old in ("nodes_ogdl.geojson", "nodes_osm.geojson", "nodes_field.geojson"):
-        (OUT / old).unlink(missing_ok=True)  # 舊版含推論資源的檔案
 
-    ref = pd.read_csv(PROCESSED / "ogdl" / "nodes.csv", dtype={"village_code": str, "business_id": str})
-    ref = ref[(ref["visibility"] == "public") & (ref["confidence"] == "high")]
-    _write_features(OUT / "nodes_reference.geojson", [
-        {"type": "Feature", "geometry": {"type": "Point", "coordinates": [round(r.lon, 6), round(r.lat, 6)]},
-         "properties": {"id": r.node_id, "name": r.name, "address": _clean(r.address), "category": r.category_label,
-                        "display_category": _display_category(r.category_label),
-                        "since_year": None if pd.isna(r.since_year) else int(r.since_year),
-                        "geocode_level": r.geocode_level, "source": r.source, "village_code": _clean(r.village_code)}}
-        for r in ref.itertuples()
-    ])
+    公開登記的店家與工廠（data/processed/ogdl/nodes.csv，由 nodes.py 產生）2026-10-31 起不再放上網站。
+    """
+    for old in ("nodes_ogdl.geojson", "nodes_osm.geojson", "nodes_field.geojson", "nodes_reference.geojson"):
+        (OUT / old).unlink(missing_ok=True)  # 舊版含推論資源的檔案；店家與工廠圖層已移除
 
     # 確認資料有兩個來源：據點範本（nodes/*.yaml → *_field.csv）與據點填報系統（pipeline/portal.py → *_portal.csv）
     def read_all(kind: str, columns: list[str]) -> pd.DataFrame:

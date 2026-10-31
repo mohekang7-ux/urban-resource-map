@@ -161,17 +161,13 @@ function showVillage(f) {
         : `<p class="sub">找不到這個里的官方頁面。</p>`}
     <p class="sub">里長姓名與聯絡方式以官方頁面為準，本平台不另外收錄；里長簡介由各里自行維護，部分內容可能較久未更新。115 年 11 月 28 日里長改選後，堆肥站周邊的里會補上經確認的里辦公處聯絡方式。</p>
 
-    <h3>公開登記的店家與工廠（參考）</h3>
-    ${referenceSummary(p.village_code)}
-
     <div class="source">
       人口：內政部戶政司 ${PERIOD_LABEL.population(meta.periods.population)}；教育：內政部戶政司 ${PERIOD_LABEL.education(meta.periods.education)}；
       所得：財政部財政資訊中心 ${PERIOD_LABEL.income(meta.periods.income)}；村里界：內政部國土測繪中心；里頁面連結：臺北市鄰里服務網。
-      店家與工廠：經濟部商業登記、臺北市特定工廠清冊。主要行業：財政部財政資訊中心全國營業（稅籍）登記（${meta.periods.industry}）。
+      主要行業：財政部財政資訊中心全國營業（稅籍）登記（${meta.periods.industry}）。
       皆依政府資料開放授權條款第 1 版。戶籍資料不含未遷入戶籍的居民；村里統計不代表個人。
     </div>`;
   renderIndustry(p);
-  bindReferenceLinks();
 }
 
 // ---------- 各里主要行業（稅籍登記，pipeline/industry.py） ----------
@@ -240,63 +236,14 @@ function renderIndustry(p) {
   }));
 }
 
-// ---------- 公開登記的店家與工廠（參考層） ----------
-
-let reference = null;
-
-function referenceSummary(villageCode) {
-  const list = reference.features.filter((f) => f.properties.village_code === villageCode);
-  if (!list.length) return `<p class="sub">這個里沒有高可信度的公開登記店家或工廠。</p>`;
-  return list.map((f) => `<button class="result" data-ref="${f.id}">
-      <span class="result-name">${esc(f.properties.name)}</span>
-      <span class="result-meta">${esc(f.properties.display_category)}</span>
-    </button>`).join("") +
-    `<p class="note">依公開登記資料整理，只列出名稱與地址都像實體店面的高可信度據點；未經現地確認。</p>`;
-}
-
-function bindReferenceLinks() {
-  document.querySelectorAll("[data-ref]").forEach((btn) => btn.addEventListener("click", () => {
-    const f = reference.features[Number(btn.dataset.ref)];
-    map.flyTo({ center: f.geometry.coordinates, zoom: Math.max(map.getZoom(), 16) });
-    showReferenceNode(f);
-  }));
-}
-
-const REF_SOURCE_LABEL = {
-  gcis_f206010: "商業登記（五金零售業）", gcis_f106010: "商業登記（五金批發業）",
-  gcis_building_retail: "商業登記（建材零售業）", tp_special_factories: "臺北市特定工廠清冊",
-};
-
-function showReferenceNode(f) {
-  const p = f.properties;
-  const village = villages.features.find((v) => v.properties.village_code === p.village_code);
-  document.getElementById("panel").innerHTML = `
-    ${village ? `<button class="back" data-back>← 回到${esc(village.properties.village)}</button>` : ""}
-    <div class="node-card">
-      <div class="node-name">${esc(p.name)}</div>
-      <div class="sub">${esc(p.address || "（沒有地址）")}</div>
-      <div class="lbl">登記類別</div>
-      <p class="sub">${esc(p.category)}${p.since_year ? `・${p.since_year} 年登記` : ""}</p>
-      <div class="node-status">
-        <span class="tag">公開資料・未經現地確認</span>
-        ${p.geocode_level === "road" ? `<span class="tag warn">位置只對到路段，可能有數百公尺誤差</span>` : ""}
-      </div>
-      <p class="note">這筆資料只代表「有這家店的登記」。實際有什麼、能不能借或買，需要現地確認；確認後的資料會出現在「我附近有哪些夥伴？」。</p>
-      <div class="source">來源：${String(p.source).split(";").map((s) => esc(REF_SOURCE_LABEL[s] || s)).join("、")}（政府資料開放授權條款第 1 版）</div>
-    </div>`;
-  const back = document.querySelector("[data-back]");
-  if (back) back.addEventListener("click", () => showVillage(village));
-}
-
 function showIntro() {
   document.getElementById("panel").innerHTML = `
     <h2>我在一個怎樣的地方？</h2>
-    <p>這裡整理政府公開資料，作為了解鄰里的參考：村里的人口、性別、年齡、教育程度、所得與主要行業，都市計畫使用分區，國土利用現況調查，以及公開登記的店家與工廠。</p>
-    <p class="sub">點選村里查看概況；左上角可以切換著色的指標。店家與工廠只顯示名稱與地址都像實體店面的高可信度登記資料，並且不推測它們有哪些資源。</p>
+    <p>這裡整理政府公開資料，作為了解鄰里的參考：村里的人口、性別、年齡、教育程度、所得與主要行業，都市計畫使用分區，以及國土利用現況調查。</p>
+    <p class="sub">點選村里查看概況；左上角可以切換著色的指標與圖層。公開資料只呈現登記與統計上的事實，不推測各地有哪些資源。</p>
     <div class="metrics">
       <div class="metric"><div class="label">村里數</div><div class="value">${villages.features.length}</div></div>
       <div class="metric"><div class="label">戶籍人口</div><div class="value">${fmt(villages.features.reduce((s, f) => s + (f.properties.pop_total || 0), 0))}</div></div>
-      <div class="metric"><div class="label">公開登記店家與工廠（高可信度）</div><div class="value">${fmt(reference.features.length)}</div></div>
     </div>
     <div class="source">這是原型，資料與介面都還在調整。</div>`;
 }
@@ -306,9 +253,6 @@ let currentMode = "explore";
 function setMode(mode) {
   if (currentMode === "resources" && mode !== "resources") exitResourceMode();
   currentMode = mode;
-  // 公開資料的店家只在參考模式顯示，避免和「我附近有哪些夥伴？」的確認資料混在一起
-  const showRef = mode === "explore" && document.getElementById("toggle-reference").checked;
-  map.setLayoutProperty("reference-points", "visibility", showRef ? "visible" : "none");
   document.querySelectorAll(".mode").forEach((b) => b.classList.toggle("active", b.dataset.mode === mode));
   if (mode === "explore") {
     selectedId != null ? showVillage(villages.features.find((f) => f.id === selectedId)) : showIntro();
@@ -401,21 +345,15 @@ function setupToggles() {
     }
     updateOverlays();
   });
-
-  document.getElementById("toggle-reference").addEventListener("change", (e) => {
-    if (currentMode === "explore") map.setLayoutProperty("reference-points", "visibility", e.target.checked ? "visible" : "none");
-  });
 }
 
 async function init() {
   document.getElementById("panel").innerHTML = `<p class="sub">載入資料中…</p>`;
-  [villages, meta, reference] = await Promise.all([
+  [villages, meta] = await Promise.all([
     fetch("data/villages.geojson").then((r) => r.json()),
     fetch("data/meta.json").then((r) => r.json()),
-    fetch("data/nodes_reference.geojson").then((r) => r.json()),
   ]);
   villages.features.forEach((f, i) => (f.id = i));
-  reference.features.forEach((f, i) => (f.id = i));
 
   map = new maplibregl.Map({
     container: "map",
@@ -438,17 +376,6 @@ async function init() {
     map.addLayer({
       id: "villages-selected", type: "line", source: "villages",
       paint: { "line-color": "#185FA5", "line-width": ["case", ["boolean", ["feature-state", "selected"], false], 3, 0] },
-    });
-
-    // 公開登記的店家與工廠：統一用中性的灰褐色空心點，表示「參考、未確認」
-    map.addSource("reference", { type: "geojson", data: reference });
-    map.addLayer({
-      id: "reference-points", type: "circle", source: "reference",
-      paint: {
-        "circle-radius": ["interpolate", ["linear"], ["zoom"], 11, 3.5, 16, 7],
-        "circle-color": "#ffffff", "circle-stroke-color": "#5F5E5A",
-        "circle-stroke-width": ["interpolate", ["linear"], ["zoom"], 11, 1.2, 16, 2],
-      },
     });
 
     // 讓全市剛好落在左上控制面板以外的可視範圍
@@ -485,25 +412,14 @@ async function init() {
       map.getCanvas().style.cursor = "";
       popup.remove();
     });
-    map.on("mouseenter", "reference-points", () => { if (currentMode === "explore") map.getCanvas().style.cursor = "pointer"; });
-    map.on("mouseleave", "reference-points", () => { map.getCanvas().style.cursor = ""; });
-    map.on("click", "reference-points", (e) => {
-      if (currentMode !== "explore") return;
-      showReferenceNode(reference.features[e.features[0].id]);
-    });
-
     // 國土利用開啟時，點地圖查詢該位置的土地利用
     map.on("click", (e) => {
       if (currentMode !== "explore" || !document.getElementById("toggle-landuse").checked) return;
-      if (map.getLayoutProperty("reference-points", "visibility") !== "none" &&
-          map.queryRenderedFeatures(e.point, { layers: ["reference-points"] }).length) return;
       queryLanduse(e.lngLat);
     });
 
     map.on("click", "villages-fill", (e) => {
       if (currentMode !== "explore") return; // 資源網絡模式下點地圖是選據點，不切換村里
-      if (map.getLayoutProperty("reference-points", "visibility") !== "none" &&
-          map.queryRenderedFeatures(e.point, { layers: ["reference-points"] }).length) return; // 點到的是店家
       if (selectedId !== null) map.setFeatureState({ source: "villages", id: selectedId }, { selected: false });
       selectedId = e.features[0].id;
       map.setFeatureState({ source: "villages", id: selectedId }, { selected: true });

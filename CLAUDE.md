@@ -44,9 +44,9 @@
   - `villages.py`：村里界；`population.py`：村里人口與指標；`education.py`：教育程度；`income.py`：綜所稅所得；`industry.py`：各里行業組成（稅籍登記，主行業歸成 12 類，含「街面」版本）；`village_links.py`：各里在臺北市鄰里服務網的頁面與「里長簡介」連結（不收錄里長個資；里長簡介連結要逐頁讀取，約 8 分鐘，結果有快取）；`zoning.py`：使用分區與大類；`geocode.py`：用臺北市門牌資料做地址轉座標；`nodes.py`：公開資料據點管線（商業登記、登記工廠、特定工廠、OSM、據點範本 → nodes，依授權分開存放；不推論資源）
   - 輸出：`data/processed/ogdl/taipei_villages.geojson`（村里界加上所有指標）、`taipei_village_indicators.csv`、`taipei_zoning.geojson`（不進 git）
 - **網頁原型**在 `site/`：靜態網站，用 MapLibre GL JS 4.7.1 加上 OpenFreeMap positron 底圖（免金鑰）。
-  - 先跑 `run_all.py` 和 `nodes.py`，再跑 `.venv/bin/python pipeline/build_site.py`，產生 `site/data/`（villages、zoning、meta、nodes_reference、nodes_verified、vocab）。
+  - 先跑 `run_all.py`，再跑 `.venv/bin/python pipeline/build_site.py`，產生 `site/data/`（villages、zoning、meta、nodes_verified、vocab）。`nodes.py` 的公開登記店家與工廠（`data/processed/ogdl/nodes.csv`）2026-10-31 起不放上網站。
   - 本機預覽：`.claude/launch.json` 的 `site` 設定（`python -m http.server 8765 --directory site`）。
-  - **資料真實性原則（2026-10-27）**：公開資料不推論據點有哪些資源。「我在一個怎樣的地方？」模式（公開資料，僅供參考）只顯示高可信度的公開登記店家與工廠，只呈現事實；「我附近有哪些夥伴？」模式只放現地確認或據點本身填寫的供給與需求，資料填入前為空。
+  - **資料真實性原則（2026-10-27）**：公開資料不推論據點有哪些資源。「我在一個怎樣的地方？」模式（公開資料，僅供參考）只呈現村里統計與圖層等事實，不顯示個別店家（店家與工廠圖層 2026-10-31 移除）；「我附近有哪些夥伴？」模式只放現地確認或據點本身填寫的供給與需求，資料填入前為空。
   - 只有兩個模式：「我在一個怎樣的地方？」（內部代碼 `explore`，原「探索鄰里」「公開資料（參考）」）與「我附近有哪些夥伴？」（內部代碼 `resources`，原「找資源」「資源網絡（已確認）」，程式在 `site/resources.js`）；2026-10-28 改為問句名稱。「示範點」分頁已刪除。
   - 資源網絡以**空間據點**為單位，每個據點可以有「提供」（resources）與「需要」（wants，來自 `data/processed/field/intents_field.csv`）。沒有固定地點的資源與個人，依 `docs/resource-database.md` 第十四節的例外規則處理。
   - 堆肥站**只用據點填報系統管理**（2026-10-28 起）：網站上的「臺大根與芽堆肥據點」來自填報系統，舊的 `nodes/ntu-compost.yaml` 已刪除。堆肥站不出現在公開資料版面。
