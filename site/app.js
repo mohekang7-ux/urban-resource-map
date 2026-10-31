@@ -29,6 +29,14 @@ const ZONING_COLORS = {
   特定專用區: "#FAC775", 農業與保護: "#97C459", 水域: "#85B7EB", 其他: "#D3D1C7",
 };
 
+// 國土利用現況調查：內政部國土測繪中心的 WMTS 圖磚（LUIMAP 是全部類別，LUIMAP01–09 是各第一級類別）
+const LANDUSE_CLASSES = [
+  ["", "全部"], ["01", "農業"], ["02", "森林"], ["03", "交通"], ["04", "水利"],
+  ["05", "建築"], ["06", "公共"], ["07", "遊憩"], ["08", "礦鹽"], ["09", "其他"],
+];
+const landuseTiles = (code) => [`https://wmts.nlsc.gov.tw/wmts/LUIMAP${code}/default/GoogleMapsCompatible/{z}/{y}/{x}`];
+const LANDUSE_QUERY = "https://api.nlsc.gov.tw/other/LandUsePointQuery";
+
 const PERIOD_LABEL = {
   population: (p) => `民國 ${p.slice(0, 3)} 年 ${Number(p.slice(3))} 月`,
   education: (p) => `民國 ${p} 年`,
@@ -213,7 +221,7 @@ function showReferenceNode(f) {
 function showIntro() {
   document.getElementById("panel").innerHTML = `
     <h2>我在一個怎樣的地方？</h2>
-    <p>這裡整理政府公開資料，作為了解鄰里的參考：村里的人口、性別、年齡、教育程度與所得，都市計畫使用分區，以及公開登記的店家與工廠。</p>
+    <p>這裡整理政府公開資料，作為了解鄰里的參考：村里的人口、性別、年齡、教育程度與所得，都市計畫使用分區，國土利用現況調查，以及公開登記的店家與工廠。</p>
     <p class="sub">點選村里查看概況；左上角可以切換著色的指標。店家與工廠只顯示名稱與地址都像實體店面的高可信度登記資料，並且不推測它們有哪些資源。</p>
     <div class="metrics">
       <div class="metric"><div class="label">村里數</div><div class="value">${villages.features.length}</div></div>
@@ -235,6 +243,7 @@ function setMode(mode) {
   if (mode === "explore") {
     selectedId != null ? showVillage(villages.features.find((f) => f.id === selectedId)) : showIntro();
   } else {
+    landusePopup.remove();
     enterResourceMode();
   }
 }
@@ -243,15 +252,73 @@ function setupModes() {
   document.querySelectorAll(".mode").forEach((btn) => btn.addEventListener("click", () => setMode(btn.dataset.mode)));
 }
 
+// 使用分區或國土利用開啟時，村里著色改為透明（一次只顯示一種著色）
+function villageFillOpacity() {
+  const overlay = document.getElementById("toggle-zoning").checked || document.getElementById("toggle-landuse").checked;
+  return overlay ? 0 : 0.78;
+}
+
+function updateOverlays() {
+  const zoningOn = document.getElementById("toggle-zoning").checked;
+  const landuseOn = document.getElementById("toggle-landuse").checked;
+  if (map.getLayer("zoning-fill")) map.setLayoutProperty("zoning-fill", "visibility", zoningOn ? "visible" : "none");
+  if (map.getLayer("landuse")) map.setLayoutProperty("landuse", "visibility", landuseOn ? "visible" : "none");
+  if (currentMode === "explore") map.setPaintProperty("villages-fill", "fill-opacity", villageFillOpacity());
+  document.getElementById("zoning-legend").hidden = !zoningOn;
+  document.getElementById("landuse-legend").hidden = !landuseOn;
+  document.getElementById("legend").style.opacity = zoningOn || landuseOn ? 0.4 : 1;
+  if (!landuseOn) landusePopup.remove();
+}
+
+const landusePopup = new maplibregl.Popup({ maxWidth: "260px", closeOnClick: false }); // 每次點地圖都會重新查詢，不要被同一次點擊關掉
+
+async function queryLanduse(lngLat) {
+  const { lng, lat } = lngLat;
+  landusePopup.setLngLat(lngLat).setHTML(`<span class="sub">查詢土地利用中…</span>`).addTo(map);
+  try {
+    const xml = await fetch(`${LANDUSE_QUERY}/${lng.toFixed(6)}/${lat.toFixed(6)}/4326`).then((r) => r.text());
+    const doc = new DOMParser().parseFromString(xml, "application/xml");
+    const get = (tag) => doc.querySelector(`ITEM > ${tag}`)?.textContent || "";
+    if (!get("Lname_C1")) return landusePopup.setHTML(`<span class="sub">這個位置沒有國土利用調查資料。</span>`);
+    landusePopup.setHTML(`<b>${esc(get("NAME"))}</b><br>${esc(get("Lname_C1"))}・${esc(get("Lname_C2"))}
+      <div class="note">國土利用現況調查（${esc(get("LYEAR"))} 年 ${esc(get("LMONTH"))} 月調查）</div>`);
+  } catch (e) {
+    landusePopup.setHTML(`<span class="sub">查詢失敗，請稍後再試。</span>`);
+  }
+}
+
 function setupToggles() {
   const zoningBox = document.getElementById("toggle-zoning");
+  const landuseBox = document.getElementById("toggle-landuse");
   const zoningLegend = document.getElementById("zoning-legend");
   zoningLegend.innerHTML = Object.entries(ZONING_COLORS)
     .map(([k, c]) => `<div class="legend-row"><span class="swatch" style="background:${c}"></span>${k}</div>`)
     .join("");
 
+  const landuseLegend = document.getElementById("landuse-legend");
+  landuseLegend.innerHTML = `<div class="landuse-classes">${LANDUSE_CLASSES
+    .map(([code, name]) => `<button type="button" class="chip${code ? "" : " active"}" data-landuse="${code}">${name}</button>`).join("")}</div>
+    <div class="note">顏色依國土測繪中心的分類，細類各有不同顏色；點地圖可以查詢該位置的用途。這是調查當時的實際用途，和都市計畫允許的用途（使用分區）不一定相同。</div>`;
+  landuseLegend.querySelectorAll("[data-landuse]").forEach((btn) => btn.addEventListener("click", () => {
+    landuseLegend.querySelectorAll("[data-landuse]").forEach((b) => b.classList.toggle("active", b === btn));
+    map.getSource("landuse").setTiles(landuseTiles(btn.dataset.landuse));
+  }));
+
+  landuseBox.addEventListener("change", () => {
+    if (landuseBox.checked) zoningBox.checked = false;
+    if (landuseBox.checked && !map.getSource("landuse")) {
+      map.addSource("landuse", {
+        type: "raster", tiles: landuseTiles(""), tileSize: 256, maxzoom: 18,
+        attribution: "國土利用現況調查 © 內政部國土測繪中心",
+      });
+      map.addLayer({ id: "landuse", type: "raster", source: "landuse", paint: { "raster-opacity": 0.75 } }, "villages-line");
+    }
+    updateOverlays();
+  });
+
   zoningBox.addEventListener("change", async () => {
     const on = zoningBox.checked;
+    if (on) landuseBox.checked = false;
     if (on && !map.getSource("zoning")) {
       zoningBox.disabled = true;
       const data = await fetch("data/zoning.geojson").then((r) => r.json());
@@ -262,11 +329,7 @@ function setupToggles() {
       map.addLayer({ id: "zoning-fill", type: "fill", source: "zoning", paint: { "fill-color": match, "fill-opacity": 0.75 } }, "villages-line");
       zoningBox.disabled = false;
     }
-    if (map.getLayer("zoning-fill")) map.setLayoutProperty("zoning-fill", "visibility", on ? "visible" : "none");
-    // 一次只顯示一種著色：開啟使用分區時，村里著色改為透明
-    map.setPaintProperty("villages-fill", "fill-opacity", on ? 0 : 0.78);
-    zoningLegend.hidden = !on;
-    document.getElementById("legend").style.opacity = on ? 0.4 : 1;
+    updateOverlays();
   });
 
   document.getElementById("toggle-reference").addEventListener("change", (e) => {
@@ -342,6 +405,7 @@ async function init() {
       hoveredId = f.id;
       map.setFeatureState({ source: "villages", id: hoveredId }, { hover: true });
       map.getCanvas().style.cursor = "pointer";
+      if (villageFillOpacity() === 0) return popup.remove(); // 村里著色關閉時，不顯示指標數值
       const v = f.properties[current.key];
       popup.setLngLat(e.lngLat).setHTML(`<b>${f.properties.district} ${f.properties.village}</b><br>${current.label}：${fmt(v, current.digits)}${current.unit ? " " + current.unit : ""}`).addTo(map);
     });
@@ -356,6 +420,14 @@ async function init() {
     map.on("click", "reference-points", (e) => {
       if (currentMode !== "explore") return;
       showReferenceNode(reference.features[e.features[0].id]);
+    });
+
+    // 國土利用開啟時，點地圖查詢該位置的土地利用
+    map.on("click", (e) => {
+      if (currentMode !== "explore" || !document.getElementById("toggle-landuse").checked) return;
+      if (map.getLayoutProperty("reference-points", "visibility") !== "none" &&
+          map.queryRenderedFeatures(e.point, { layers: ["reference-points"] }).length) return;
+      queryLanduse(e.lngLat);
     });
 
     map.on("click", "villages-fill", (e) => {

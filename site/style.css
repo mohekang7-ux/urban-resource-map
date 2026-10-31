@@ -45,6 +45,10 @@ select { width: 100%; font: inherit; font-size: 14px; padding: 6px 8px; border-r
 .swatch { width: 18px; height: 12px; border-radius: 3px; flex: none; }
 .toggles { border-top: 1px solid var(--border); margin-top: 10px; padding-top: 10px; display: grid; gap: 6px; font-size: 13px; }
 .zoning-legend { margin-top: 8px; display: grid; grid-template-columns: 1fr 1fr; gap: 2px 8px; }
+#landuse-legend { margin-top: 8px; }
+.landuse-classes { display: flex; flex-wrap: wrap; }
+.landuse-classes .chip { background: var(--surface); color: var(--text-2); cursor: pointer; font: inherit; font-size: 12px; }
+.landuse-classes .chip.active { background: var(--text); color: var(--surface); border-color: var(--text); }
 
 .panel { height: 100%; overflow-y: auto; background: var(--surface); border-left: 1px solid var(--border); padding: 16px; }
 .panel h2 { font-size: 18px; margin: 0 0 2px; }

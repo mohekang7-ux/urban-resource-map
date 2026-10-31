@@ -596,8 +596,7 @@ function exitResourceMode() {
   stopPlacing();
   if (!map.getLayer("nodes-circle")) return;
   ["nodes-circle", "nodes-label"].forEach((id) => map.setLayoutProperty(id, "visibility", "none"));
-  const zoningOn = document.getElementById("toggle-zoning").checked;
-  map.setPaintProperty("villages-fill", "fill-opacity", zoningOn ? 0 : 0.78);
+  map.setPaintProperty("villages-fill", "fill-opacity", villageFillOpacity());
   document.getElementById("controls").hidden = false;
 }
 
