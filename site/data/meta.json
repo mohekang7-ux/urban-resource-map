@@ -2,8 +2,60 @@
   "periods": {
     "population": "11509",
     "education": "114",
-    "income": "112"
+    "income": "112",
+    "industry": "2026-10-31"
   },
+  "industry_coverage": 99.4,
+  "industry_categories": [
+    {
+      "id": "manufacturing",
+      "label": "製造"
+    },
+    {
+      "id": "repair",
+      "label": "修理"
+    },
+    {
+      "id": "construction",
+      "label": "營建工程"
+    },
+    {
+      "id": "building_materials",
+      "label": "建材五金"
+    },
+    {
+      "id": "recycling",
+      "label": "回收與環境"
+    },
+    {
+      "id": "wholesale",
+      "label": "批發"
+    },
+    {
+      "id": "retail",
+      "label": "零售"
+    },
+    {
+      "id": "food_lodging",
+      "label": "餐飲住宿"
+    },
+    {
+      "id": "transport",
+      "label": "運輸倉儲"
+    },
+    {
+      "id": "office",
+      "label": "辦公室服務"
+    },
+    {
+      "id": "personal",
+      "label": "個人與社區服務"
+    },
+    {
+      "id": "other",
+      "label": "其他"
+    }
+  ],
   "taipei_median": {
     "pop_total": 5096.5,
     "pop_density": 26561.0,

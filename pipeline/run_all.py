@@ -9,6 +9,7 @@ import sys
 
 import education
 import income
+import industry
 import population
 import village_links
 import villages
@@ -28,20 +29,20 @@ def report_missing(df, column: str, label: str) -> None:
 def main(force: bool = False) -> None:
     OUT.mkdir(parents=True, exist_ok=True)
 
-    print("[1/5] 村里界")
+    print("[1/6] 村里界")
     vil = villages.fetch(force)
 
-    print("[2/5] 村里人口")
+    print("[2/6] 村里人口")
     pop = population.fetch(force)
     vil = vil.merge(pop, on="village_code", how="left")
     report_missing(vil, "pop_total", "人口資料")
 
-    print("[3/5] 村里教育程度")
+    print("[3/6] 村里教育程度")
     edu = education.fetch(force)
     vil = vil.merge(edu, on="village_code", how="left")
     report_missing(vil, "share_tertiary", "教育程度資料")
 
-    print("[4/5] 村里所得")
+    print("[4/6] 村里所得")
     inc = income.fetch(force)
     vil = vil.merge(inc, on=["district", "village"], how="left")
     report_missing(vil, "income_median", "所得資料")
@@ -51,6 +52,10 @@ def main(force: bool = False) -> None:
     report_missing(vil, "li_chief_url", "里長簡介連結")
     report_missing(vil, "li_url", "鄰里服務網連結")
 
+    print("[5/6] 各里行業組成（稅籍登記）")
+    ind = industry.fetch(vil, force)
+    vil = vil.merge(ind, on="village_code", how="left")
+
     vil["area_km2"] =(vil.to_crs(3826).area / 1e6).round(3)
     vil["pop_density"] = (vil["pop_total"] / vil["area_km2"]).round(0)  # 每平方公里人數
 
@@ -58,7 +63,7 @@ def main(force: bool = False) -> None:
     vil.drop(columns="geometry").to_csv(OUT / "taipei_village_indicators.csv", index=False)
     print(f"  輸出：{OUT / 'taipei_villages.geojson'}、taipei_village_indicators.csv")
 
-    print("[5/5] 使用分區")
+    print("[6/6] 使用分區")
     zon = zoning.fetch(force)
     zon.to_file(OUT / "taipei_zoning.geojson", driver="GeoJSON")
     print(f"  輸出：{OUT / 'taipei_zoning.geojson'}")

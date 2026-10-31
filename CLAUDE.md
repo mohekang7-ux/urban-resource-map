@@ -41,7 +41,7 @@
 - **資料處理用 Python**。虛擬環境在 `.venv/`，套件列在 `requirements.txt`。
 - **資料管線**在 `pipeline/`：執行 `.venv/bin/python pipeline/run_all.py`（加 `--force` 會重新下載）。
   - `common.py`：data.gov.tw 資料集查詢、下載、解壓縮（處理 Big5 檔名）
-  - `villages.py`：村里界；`population.py`：村里人口與指標；`education.py`：教育程度；`income.py`：綜所稅所得；`village_links.py`：各里在臺北市鄰里服務網的頁面與「里長簡介」連結（不收錄里長個資；里長簡介連結要逐頁讀取，約 8 分鐘，結果有快取）；`zoning.py`：使用分區與大類；`geocode.py`：用臺北市門牌資料做地址轉座標；`nodes.py`：公開資料據點管線（商業登記、登記工廠、特定工廠、OSM、據點範本 → nodes，依授權分開存放；不推論資源）
+  - `villages.py`：村里界；`population.py`：村里人口與指標；`education.py`：教育程度；`income.py`：綜所稅所得；`industry.py`：各里行業組成（稅籍登記，主行業歸成 12 類，含「街面」版本）；`village_links.py`：各里在臺北市鄰里服務網的頁面與「里長簡介」連結（不收錄里長個資；里長簡介連結要逐頁讀取，約 8 分鐘，結果有快取）；`zoning.py`：使用分區與大類；`geocode.py`：用臺北市門牌資料做地址轉座標；`nodes.py`：公開資料據點管線（商業登記、登記工廠、特定工廠、OSM、據點範本 → nodes，依授權分開存放；不推論資源）
   - 輸出：`data/processed/ogdl/taipei_villages.geojson`（村里界加上所有指標）、`taipei_village_indicators.csv`、`taipei_zoning.geojson`（不進 git）
 - **網頁原型**在 `site/`：靜態網站，用 MapLibre GL JS 4.7.1 加上 OpenFreeMap positron 底圖（免金鑰）。
   - 先跑 `run_all.py` 和 `nodes.py`，再跑 `.venv/bin/python pipeline/build_site.py`，產生 `site/data/`（villages、zoning、meta、nodes_reference、nodes_verified、vocab）。

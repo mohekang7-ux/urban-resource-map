@@ -150,6 +150,9 @@ function showVillage(f) {
     <h3>所得（千元）</h3>
     <p class="sub">中位數 ${fmt(p.income_median)}・平均數 ${fmt(p.income_mean)}・第一分位數 ${fmt(p.income_q1)}・第三分位數 ${fmt(p.income_q3)}</p>
 
+    <h3>主要行業（營業登記家數）</h3>
+    <div id="industry"></div>
+
     <h3>里長與里辦公處</h3>
     ${p.li_chief_url
       ? `<a class="link-button" href="${p.li_chief_url}" target="_blank" rel="noopener">${p.village}里長簡介（臺北市鄰里服務網）↗</a>`
@@ -164,10 +167,77 @@ function showVillage(f) {
     <div class="source">
       人口：內政部戶政司 ${PERIOD_LABEL.population(meta.periods.population)}；教育：內政部戶政司 ${PERIOD_LABEL.education(meta.periods.education)}；
       所得：財政部財政資訊中心 ${PERIOD_LABEL.income(meta.periods.income)}；村里界：內政部國土測繪中心；里頁面連結：臺北市鄰里服務網。
-      店家與工廠：經濟部商業登記、臺北市特定工廠清冊。皆依政府資料開放授權條款第 1 版。
-      戶籍資料不含未遷入戶籍的居民；村里統計不代表個人。
+      店家與工廠：經濟部商業登記、臺北市特定工廠清冊。主要行業：財政部財政資訊中心全國營業（稅籍）登記（${meta.periods.industry}）。
+      皆依政府資料開放授權條款第 1 版。戶籍資料不含未遷入戶籍的居民；村里統計不代表個人。
     </div>`;
+  renderIndustry(p);
   bindReferenceLinks();
+}
+
+// ---------- 各里主要行業（稅籍登記，pipeline/industry.py） ----------
+
+// 和本專案相關的 5 類用鮮明顏色，其他行業用灰階（2026-10-31 決定）
+const INDUSTRY_COLORS = {
+  manufacturing: "#D85A30", repair: "#1D9E75", construction: "#BA7517", building_materials: "#185FA5", recycling: "#639922",
+  wholesale: "#5F5E5A", retail: "#77766F", food_lodging: "#8E8D86", transport: "#A5A49D", office: "#BBB9B2", personal: "#CFCDC6", other: "#E2E0D9",
+};
+const PROJECT_INDUSTRIES = new Set(["manufacturing", "repair", "construction", "building_materials", "recycling"]);
+let industryStreetOnly = false;
+
+function pieSvg(items, total) {
+  const r = 52, cx = 60, cy = 60, inner = 30;
+  let angle = -Math.PI / 2;
+  const pt = (a, rad) => `${(cx + rad * Math.cos(a)).toFixed(2)} ${(cy + rad * Math.sin(a)).toFixed(2)}`;
+  const slices = items.filter((it) => it.n > 0).map((it) => {
+    const share = it.n / total;
+    const title = `<title>${it.label}：${fmt(it.n)} 家（${fmt(share * 100, 1)}%）</title>`;
+    if (share >= 0.9999) {
+      return `<circle cx="${cx}" cy="${cy}" r="${(r + inner) / 2}" fill="none" stroke="${INDUSTRY_COLORS[it.id]}" stroke-width="${r - inner}">${title}</circle>`;
+    }
+    const a0 = angle, a1 = angle + share * 2 * Math.PI;
+    angle = a1;
+    const large = a1 - a0 > Math.PI ? 1 : 0;
+    return `<path d="M ${pt(a0, r)} A ${r} ${r} 0 ${large} 1 ${pt(a1, r)} L ${pt(a1, inner)} A ${inner} ${inner} 0 ${large} 0 ${pt(a0, inner)} Z" fill="${INDUSTRY_COLORS[it.id]}" stroke="#fff" stroke-width="0.8">${title}</path>`;
+  }).join("");
+  return `<svg viewBox="0 0 120 120" width="132" height="132" role="img" aria-label="主要行業圓餅圖">${slices}
+    <text x="60" y="58" text-anchor="middle" font-size="15" font-weight="600" fill="currentColor">${fmt(total)}</text>
+    <text x="60" y="72" text-anchor="middle" font-size="9" fill="#5f5e5a">家</text></svg>`;
+}
+
+function renderIndustry(p) {
+  const box = document.getElementById("industry");
+  if (!box) return;
+  const suffix = industryStreetOnly ? "_street" : "";
+  const items = meta.industry_categories.map((c) => ({ ...c, n: p[`ind_${c.id}${suffix}`] || 0 }));
+  const total = items.reduce((s, it) => s + it.n, 0);
+  const rows = items
+    .filter((it) => PROJECT_INDUSTRIES.has(it.id) || it.n > 0) // 本專案相關的類別即使是 0 也列出
+    .map((it) => `<div class="ind-row${PROJECT_INDUSTRIES.has(it.id) ? " project" : ""}">
+        <span class="swatch" style="background:${INDUSTRY_COLORS[it.id]}"></span><span>${it.label}</span>
+        <span class="ind-n">${fmt(it.n)}</span><span class="ind-pct">${total ? fmt((it.n / total) * 100, 1) : "0.0"}%</span></div>`)
+    .join("");
+  const projectShare = (props) => {
+    const all = meta.industry_categories.reduce((s, c) => s + (props[`ind_${c.id}${suffix}`] || 0), 0);
+    const proj = [...PROJECT_INDUSTRIES].reduce((s, id) => s + (props[`ind_${id}${suffix}`] || 0), 0);
+    return all ? (proj / all) * 100 : null;
+  };
+  const shares = villages.features.map((f) => projectShare(f.properties)).filter((v) => v != null).sort((a, b) => a - b);
+  const share = projectShare(p);
+  box.innerHTML = `
+    <div class="segmented" role="group" aria-label="計算範圍">
+      <button type="button" data-ind-street="0" class="${industryStreetOnly ? "" : "on"}">全部登記</button>
+      <button type="button" data-ind-street="1" class="${industryStreetOnly ? "on" : ""}">只看街面</button>
+    </div>
+    ${total ? `<div class="ind-chart">${pieSvg(items, total)}<div class="ind-legend">${rows}</div></div>`
+      : `<p class="sub">這個里沒有${industryStreetOnly ? "街面的" : ""}營業登記。</p>`}
+    ${share != null ? `<p class="sub">製造相關（粗體 5 類）合計占 <b>${fmt(share, 1)}%</b>・全市各里中位數 ${fmt(shares[Math.floor(shares.length / 2)], 1)}%</p>` : ""}
+    ${total && total < 30 ? `<p class="note">家數少於 30，比例容易受一兩家影響。</p>` : ""}
+    <p class="note">依營業中業者登記的主行業計算，每家只算一次；家數不代表規模，登記地址也不一定是實際作業地點。
+      「只看街面」只算 1 樓、地下室或沒寫樓層的登記，排除辦公大樓樓上的公司。全市 ${fmt(meta.industry_coverage, 1)}% 的登記可以歸到里。</p>`;
+  box.querySelectorAll("[data-ind-street]").forEach((btn) => btn.addEventListener("click", () => {
+    industryStreetOnly = btn.dataset.indStreet === "1";
+    renderIndustry(p);
+  }));
 }
 
 // ---------- 公開登記的店家與工廠（參考層） ----------
@@ -221,7 +291,7 @@ function showReferenceNode(f) {
 function showIntro() {
   document.getElementById("panel").innerHTML = `
     <h2>我在一個怎樣的地方？</h2>
-    <p>這裡整理政府公開資料，作為了解鄰里的參考：村里的人口、性別、年齡、教育程度與所得，都市計畫使用分區，國土利用現況調查，以及公開登記的店家與工廠。</p>
+    <p>這裡整理政府公開資料，作為了解鄰里的參考：村里的人口、性別、年齡、教育程度、所得與主要行業，都市計畫使用分區，國土利用現況調查，以及公開登記的店家與工廠。</p>
     <p class="sub">點選村里查看概況；左上角可以切換著色的指標。店家與工廠只顯示名稱與地址都像實體店面的高可信度登記資料，並且不推測它們有哪些資源。</p>
     <div class="metrics">
       <div class="metric"><div class="label">村里數</div><div class="value">${villages.features.length}</div></div>

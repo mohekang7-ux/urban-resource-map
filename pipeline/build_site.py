@@ -14,6 +14,7 @@ import geopandas as gpd
 import pandas as pd
 import shapely
 
+import industry
 from common import PROCESSED, ROOT
 
 SRC = PROCESSED / "ogdl"
@@ -37,7 +38,8 @@ def main() -> None:
     vil = gpd.read_file(SRC / "taipei_villages.geojson")
     pyramid_cols = [c for c in vil.columns if c.startswith("age_")]
     keep = ["village_code", "district", "village", "li_url", "li_chief_url", "households", "pop_male", "pop_female", "area_km2"]
-    vil = vil[keep + INDICATORS + pyramid_cols + ["geometry"]]
+    industry_cols = [c for c in vil.columns if c.startswith("ind_") and c not in ("ind_date", "ind_coverage")]
+    vil = vil[keep + INDICATORS + pyramid_cols + industry_cols + ["geometry"]]
     write_geojson(vil, OUT / "villages.geojson")
 
     zon = gpd.read_file(SRC / "taipei_zoning.geojson")
@@ -48,14 +50,17 @@ def main() -> None:
     write_geojson(zon[["zone_name", "zone_category", "geometry"]], OUT / "zoning.geojson")
 
     periods = gpd.read_file(
-        SRC / "taipei_villages.geojson", columns=["pop_period", "edu_year", "income_year"], ignore_geometry=True
+        SRC / "taipei_villages.geojson", columns=["pop_period", "edu_year", "income_year", "ind_date", "ind_coverage"], ignore_geometry=True
     ).iloc[0]
     meta = {
         "periods": {
             "population": str(periods["pop_period"]),
             "education": str(periods["edu_year"]),
             "income": str(periods["income_year"]),
+            "industry": str(periods["ind_date"])[:10],  # geojson 讀回來會變成日期時間
         },
+        "industry_coverage": float(periods["ind_coverage"]),
+        "industry_categories": [{"id": c, "label": label} for c, label in industry.CATEGORIES],
         "taipei_median": {c: round(float(vil[c].median()), 1) for c in INDICATORS},
     }
     (OUT / "meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
